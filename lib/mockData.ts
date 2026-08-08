@@ -42,6 +42,8 @@ export interface SiteSettingsData {
   instagramUrl: string;
   youtubeUrl: string;
   ogImageUrl?: string;
+  aboutImageUrl?: string;
+  cameraImageUrl?: string;
 }
 
 export const MOCK_SITE_SETTINGS: SiteSettingsData = {
@@ -58,6 +60,10 @@ export const MOCK_SITE_SETTINGS: SiteSettingsData = {
   youtubeUrl: "https://youtube.com",
   ogImageUrl:
     "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=1200&auto=format&fit=crop",
+  aboutImageUrl:
+    "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop",
+  cameraImageUrl:
+    "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=800&auto=format&fit=crop",
 };
 
 export const MOCK_BRANDS: BrandData[] = [

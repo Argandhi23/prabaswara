@@ -2,23 +2,12 @@
 
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import {
   Plus,
-  Trash2,
-  Edit,
   Save,
-  LogOut,
-  Upload,
-  CheckCircle,
-  AlertCircle,
-  Star,
   Settings,
   Grid,
   X,
-  ExternalLink,
-  Info,
-  Eye,
   Crop,
   ZoomIn,
   RotateCw,
@@ -26,44 +15,15 @@ import {
   Check,
   Frame,
   Layers,
-  Sparkles,
+  CheckCircle,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-
-interface Photo {
-  id: string;
-  title: string;
-  image_url: string;
-  caption: string;
-  brand_slug: string;
-  brand_title: string;
-  is_featured: boolean;
-  aspect_ratio: string;
-  display_order: number;
-}
-
-interface Brand {
-  id: string;
-  slug: string;
-  title: string;
-  tagline: string;
-  description: string;
-  cover_image: string;
-  whatsapp_message: string;
-  display_order: number;
-}
-
-interface SiteSettings {
-  company_name: string;
-  tagline: string;
-  about_text: string;
-  whatsapp_number: string;
-  default_whatsapp_message: string;
-  address: string;
-  email: string;
-  instagram_url: string;
-  youtube_url: string;
-}
+import { motion } from "framer-motion";
+import { Photo, Brand, SiteSettings, AdminToast as ToastType } from "@/types";
+import AdminHeader from "@/components/admin/AdminHeader";
+import AdminGuideBanner from "@/components/admin/AdminGuideBanner";
+import PhotoCard from "@/components/admin/PhotoCard";
+import BrandCard from "@/components/admin/BrandCard";
+import AdminToast from "@/components/admin/AdminToast";
 
 export default function AdminDashboardPage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
@@ -83,18 +43,19 @@ export default function AdminDashboardPage() {
     email: "",
     instagram_url: "",
     youtube_url: "",
+    camera_image_url: "",
+    about_image_url: "",
   });
 
   const [loading, setLoading] = useState(true);
-  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [toast, setToast] = useState<ToastType | null>(null);
 
-  // Photo Modal State (Single Modal Flow)
+  // Photo Modal State
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
 
   // Brand Cover Modal State
   const [showBrandModal, setShowBrandModal] = useState(false);
-  const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
   const [brandForm, setBrandForm] = useState({
     id: "",
     slug: "",
@@ -103,11 +64,11 @@ export default function AdminDashboardPage() {
     coverImage: "",
   });
 
-  // Target Mode for Cropper: "photo" or "brand"
-  const [cropperTarget, setCropperTarget] = useState<"photo" | "brand">("photo");
+  // Cropper Target ("photo" | "brand" | "settingCamera" | "settingAbout")
+  const [cropperTarget, setCropperTarget] = useState<"photo" | "brand" | "settingCamera" | "settingAbout">("photo");
   const [modalMode, setModalMode] = useState<"form" | "crop">("form");
 
-  // Cropper State
+  // Cropper Controls State
   const [cropperSrc, setCropperSrc] = useState<string | null>(null);
   const [cropRatio, setCropRatio] = useState<"portrait" | "landscape" | "square" | "free">("portrait");
   const [cropZoom, setCropZoom] = useState(1);
@@ -117,7 +78,7 @@ export default function AdminDashboardPage() {
   const [isCropping, setIsCropping] = useState(false);
   const cropperImageRef = useRef<HTMLImageElement | null>(null);
 
-  // Photo Form
+  // Photo Form State
   const [photoForm, setPhotoForm] = useState({
     title: "",
     imageUrl: "",
@@ -131,12 +92,12 @@ export default function AdminDashboardPage() {
 
   const router = useRouter();
 
-  const showToast = (message: string, type: "success" | "error" = "success") => {
+  const showToastMsg = (message: string, type: "success" | "error" = "success") => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4500);
   };
 
-  // Check auth & fetch initial data
+  // Auth check & data fetching
   useEffect(() => {
     async function checkAuth() {
       try {
@@ -179,10 +140,10 @@ export default function AdminDashboardPage() {
     router.push("/admin/login");
   };
 
-  // Step 1: Select File for Photo OR Brand Cover
+  // Step 1: Select File for Photo, Brand, or Settings Image
   const handleSelectFile = (
     e: React.ChangeEvent<HTMLInputElement>,
-    target: "photo" | "brand"
+    target: "photo" | "brand" | "settingCamera" | "settingAbout"
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -263,7 +224,7 @@ export default function AdminDashboardPage() {
 
       if (!blob) throw new Error("Gagal memproses blob WebP.");
 
-      // Upload to Supabase Storage
+      // Upload to Supabase Storage API
       const formData = new FormData();
       formData.append("file", blob, `cropped-${Date.now()}.webp`);
 
@@ -282,27 +243,37 @@ export default function AdminDashboardPage() {
           imageUrl: uploadResult.url,
           aspectRatio: cropRatio === "free" ? "portrait" : cropRatio,
         }));
-      } else {
+      } else if (cropperTarget === "brand") {
         setBrandForm((prev) => ({
           ...prev,
           coverImage: uploadResult.url,
         }));
+      } else if (cropperTarget === "settingCamera") {
+        setSettings((prev) => ({
+          ...prev,
+          camera_image_url: uploadResult.url,
+        }));
+      } else if (cropperTarget === "settingAbout") {
+        setSettings((prev) => ({
+          ...prev,
+          about_image_url: uploadResult.url,
+        }));
       }
 
-      showToast("Gambar baru berhasil di-crop & diunggah ke Supabase!", "success");
+      showToastMsg("Gambar baru berhasil di-crop & diunggah ke Supabase!", "success");
       setModalMode("form");
     } catch (err: any) {
-      showToast(err.message || "Gagal memproses crop gambar", "error");
+      showToastMsg(err.message || "Gagal memproses crop gambar", "error");
     } finally {
       setIsCropping(false);
     }
   };
 
-  // Save Photo
+  // Save Photo Record
   const handleSavePhoto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!photoForm.title || !photoForm.imageUrl) {
-      showToast("Judul dan Gambar wajib diisi!", "error");
+      showToastMsg("Judul dan Gambar wajib diisi!", "error");
       return;
     }
 
@@ -321,7 +292,7 @@ export default function AdminDashboardPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Gagal menyimpan foto");
 
-      showToast(
+      showToastMsg(
         editingPhoto ? "Foto & Caption berhasil diperbarui!" : "Foto baru berhasil disimpan!",
         "success"
       );
@@ -330,7 +301,7 @@ export default function AdminDashboardPage() {
       fetchData();
       router.refresh();
     } catch (err: any) {
-      showToast(err.message || "Terjadi kesalahan", "error");
+      showToastMsg(err.message || "Terjadi kesalahan", "error");
     }
   };
 
@@ -338,7 +309,7 @@ export default function AdminDashboardPage() {
   const handleSaveBrand = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!brandForm.slug || !brandForm.coverImage) {
-      showToast("Pilih Cover Image baru terlebih dahulu!", "error");
+      showToastMsg("Pilih Cover Image baru terlebih dahulu!", "error");
       return;
     }
 
@@ -352,16 +323,48 @@ export default function AdminDashboardPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Gagal menyimpan cover brand");
 
-      showToast(`Cover banner untuk ${brandForm.title} berhasil diperbarui!`, "success");
+      showToastMsg(`Cover banner untuk ${brandForm.title} berhasil diperbarui!`, "success");
       setShowBrandModal(false);
       fetchData();
       router.refresh();
     } catch (err: any) {
-      showToast(err.message || "Terjadi kesalahan", "error");
+      showToastMsg(err.message || "Terjadi kesalahan", "error");
     }
   };
 
-  // Delete Photo
+  // Save Site Settings
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyName: settings.company_name,
+          tagline: settings.tagline,
+          aboutText: settings.about_text,
+          whatsappNumber: settings.whatsapp_number,
+          defaultWhatsappMessage: settings.default_whatsapp_message,
+          address: settings.address,
+          email: settings.email,
+          instagramUrl: settings.instagram_url,
+          youtubeUrl: settings.youtube_url,
+          cameraImageUrl: settings.camera_image_url,
+          aboutImageUrl: settings.about_image_url,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal menyimpan pengaturan");
+
+      showToastMsg("Pengaturan website & gambar About berhasil disimpan!", "success");
+      router.refresh();
+    } catch (err: any) {
+      showToastMsg(err.message || "Terjadi kesalahan", "error");
+    }
+  };
+
+  // Delete Photo Record
   const handleDeletePhoto = async (id: string) => {
     if (!confirm("Apakah Anda yakin ingin menghapus foto ini dari website?")) return;
 
@@ -372,11 +375,11 @@ export default function AdminDashboardPage() {
 
       if (!res.ok) throw new Error("Gagal menghapus foto");
 
-      showToast("Foto berhasil dihapus!", "success");
+      showToastMsg("Foto berhasil dihapus!", "success");
       fetchData();
       router.refresh();
     } catch (err: any) {
-      showToast(err.message || "Gagal menghapus foto", "error");
+      showToastMsg(err.message || "Gagal menghapus foto", "error");
     }
   };
 
@@ -406,7 +409,6 @@ export default function AdminDashboardPage() {
   };
 
   const openEditBrandModal = (brand: Brand) => {
-    setEditingBrand(brand);
     setCropperTarget("brand");
     setBrandForm({
       id: brand.id,
@@ -434,10 +436,10 @@ export default function AdminDashboardPage() {
   };
 
   const categoryOptions = [
-    { slug: "swara-gallery", title: "Swara Gallery (Fotografi Seni & Fine Art)", page: "/swara-gallery" },
-    { slug: "swara-studio", title: "Swara Studio (Foto Studio, Portrait & Lookbook)", page: "/swara-studio" },
-    { slug: "swara-moment", title: "Swara Moment (Dokumentasi Event & Selebrasi)", page: "/swara-moment" },
-    { slug: "swara-wedding", title: "Swara Wedding (Foto Pernikahan & Momen Romantis)", page: "/swara-wedding" },
+    { slug: "swara-gallery", title: "Swara Gallery (Fotografi Seni & Fine Art)" },
+    { slug: "swara-studio", title: "Swara Studio (Foto Studio, Portrait & Lookbook)" },
+    { slug: "swara-moment", title: "Swara Moment (Dokumentasi Event & Selebrasi)" },
+    { slug: "swara-wedding", title: "Swara Wedding (Foto Pernikahan & Momen Romantis)" },
   ];
 
   const filteredPhotos = photos.filter((p) => {
@@ -461,91 +463,18 @@ export default function AdminDashboardPage() {
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans-body">
-      {/* Toast Notification */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className={`fixed top-6 right-6 z-50 px-5 py-3.5 rounded-2xl border backdrop-blur-xl shadow-2xl flex items-center gap-3 text-xs font-semibold ${
-              toast.type === "success"
-                ? "bg-emerald-950/90 border-emerald-700 text-emerald-200"
-                : "bg-red-950/90 border-red-700 text-red-200"
-            }`}
-          >
-            {toast.type === "success" ? (
-              <CheckCircle className="w-4 h-4 text-emerald-400" />
-            ) : (
-              <AlertCircle className="w-4 h-4 text-red-400" />
-            )}
-            <span>{toast.message}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Toast Alert */}
+      <AdminToast toast={toast} />
 
-      {/* Top Header with ENLARGED PROMINENT LOGO */}
-      <header className="border-b border-neutral-800 bg-neutral-900/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-5">
-          <div className="relative w-52 h-14 shrink-0">
-            <Image
-              src="/logo.png"
-              alt="Prabaswara Logo"
-              fill
-              sizes="208px"
-              className="object-contain object-left scale-110 origin-left"
-              priority
-            />
-          </div>
-          <div className="hidden sm:block pl-5 border-l border-neutral-800">
-            <h1 className="font-serif-heading text-lg font-bold text-white tracking-wide">
-              Admin Panel
-            </h1>
-            <p className="text-[11px] text-[#C9A961] uppercase tracking-widest font-semibold">
-              Management Portofolio & Cover Sub-Brand
-            </p>
-          </div>
-        </div>
+      {/* Admin Header */}
+      <AdminHeader onLogout={handleLogout} />
 
-        <div className="flex items-center gap-3">
-          <a
-            href="/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-300 transition-colors"
-          >
-            <span>Buka Website Utama</span>
-            <ExternalLink className="w-4 h-4 text-[#C9A961]" />
-          </a>
-
-          <button
-            onClick={handleLogout}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-950/50 hover:bg-red-900/70 border border-red-800/80 text-xs font-semibold text-red-300 transition-colors cursor-pointer"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Keluar</span>
-          </button>
-        </div>
-      </header>
-
-      {/* Main Area */}
+      {/* Main Content Container */}
       <div className="flex-1 max-w-7xl w-full mx-auto p-6 md:p-8 space-y-8">
-        {/* EXPLANATORY BANNER */}
-        <div className="bg-gradient-to-r from-neutral-900 via-neutral-900 to-[#C9A961]/10 border border-[#C9A961]/40 p-6 rounded-2xl space-y-3 relative overflow-hidden shadow-lg">
-          <div className="flex items-start gap-3">
-            <Info className="w-6 h-6 text-[#C9A961] shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <h3 className="font-serif-heading text-lg font-bold text-white flex items-center gap-2">
-                <span>Pusat Pengelolaan Gambar & Portofolio Prabaswara</span>
-              </h3>
-              <p className="text-xs text-neutral-300 font-light leading-relaxed">
-                Anda dapat mengubah **Foto Karya Galeri** di Tab 1, atau mengganti **Cover Banner 4 Sub-Brand Utama** (Swara Gallery, Studio, Moment, Wedding) di Tab 2. Seluruh gambar baru dapat dipotong (crop) dan otomatis ter-update seketika di website!
-              </p>
-            </div>
-          </div>
-        </div>
+        {/* Guide Banner */}
+        <AdminGuideBanner />
 
-        {/* Navigation Tabs */}
+        {/* Tab Navigation */}
         <div className="flex flex-wrap gap-2 border-b border-neutral-800 pb-4">
           <button
             onClick={() => setActiveTab("photos")}
@@ -580,14 +509,13 @@ export default function AdminDashboardPage() {
             }`}
           >
             <Settings className="w-4 h-4" />
-            <span>3. Pengaturan Kontak & WA</span>
+            <span>3. Gambar About & Kontak WA</span>
           </button>
         </div>
 
         {/* TAB 1: KELOLA FOTO GALERI */}
         {activeTab === "photos" && (
           <div className="space-y-6">
-            {/* Header & Add Button */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-neutral-900 p-6 rounded-2xl border border-neutral-800">
               <div>
                 <h2 className="font-serif-heading text-xl font-bold text-white">
@@ -598,15 +526,13 @@ export default function AdminDashboardPage() {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={openAddPhotoModal}
-                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg active:scale-95"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Tambah Foto Baru</span>
-                </button>
-              </div>
+              <button
+                onClick={openAddPhotoModal}
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg active:scale-95 shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tambah Foto Baru</span>
+              </button>
             </div>
 
             {/* Filter Buttons */}
@@ -687,96 +613,14 @@ export default function AdminDashboardPage() {
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredPhotos.map((photo) => {
-                  const targetPage =
-                    photo.brand_slug === "swara-gallery"
-                      ? "/swara-gallery"
-                      : photo.brand_slug === "swara-studio"
-                      ? "/swara-studio"
-                      : photo.brand_slug === "swara-moment"
-                      ? "/swara-moment"
-                      : photo.brand_slug === "swara-wedding"
-                      ? "/swara-wedding"
-                      : "/";
-
-                  return (
-                    <div
-                      key={photo.id}
-                      className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden flex flex-col justify-between hover:border-[#C9A961]/60 transition-all shadow-md group"
-                    >
-                      <div>
-                        {/* Image Preview */}
-                        <div className="relative aspect-[4/3] bg-neutral-950 overflow-hidden">
-                          <Image
-                            src={photo.image_url}
-                            alt={photo.title}
-                            fill
-                            sizes="(max-width: 640px) 100vw, 33vw"
-                            className="object-cover group-hover:scale-105 transition-transform duration-500"
-                            unoptimized
-                          />
-
-                          {photo.is_featured && (
-                            <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-[#C9A961] text-neutral-950 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-md">
-                              <Star className="w-3 h-3 fill-neutral-950" />
-                              Tampil di Homepage
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Content Info & Location Badge */}
-                        <div className="p-5 space-y-3">
-                          <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-[11px] space-y-1">
-                            <span className="text-neutral-400 font-medium block">📍 Halaman Website:</span>
-                            <div className="flex items-center justify-between">
-                              <span className="text-[#C9A961] font-bold uppercase tracking-wider">
-                                {photo.brand_title || photo.brand_slug}
-                              </span>
-                              <a
-                                href={targetPage}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-[10px] text-neutral-400 hover:text-white flex items-center gap-1 underline"
-                              >
-                                <span>Lihat</span>
-                                <Eye className="w-3 h-3 text-[#C9A961]" />
-                              </a>
-                            </div>
-                          </div>
-
-                          <h3 className="font-serif-heading text-lg font-bold text-white line-clamp-1">
-                            {photo.title}
-                          </h3>
-
-                          {photo.caption && (
-                            <p className="text-xs text-neutral-400 font-light line-clamp-2 leading-relaxed">
-                              {photo.caption}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Actions Footer */}
-                      <div className="p-4 bg-neutral-950/80 border-t border-neutral-800 flex items-center justify-between">
-                        <button
-                          onClick={() => openEditPhotoModal(photo)}
-                          className="inline-flex items-center gap-1.5 text-xs text-neutral-300 hover:text-[#C9A961] font-semibold transition-colors cursor-pointer"
-                        >
-                          <Edit className="w-3.5 h-3.5" />
-                          <span>Edit Foto & Caption</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleDeletePhoto(photo.id)}
-                          className="inline-flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-semibold transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                          <span>Hapus</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                {filteredPhotos.map((photo) => (
+                  <PhotoCard
+                    key={photo.id}
+                    photo={photo}
+                    onEdit={openEditPhotoModal}
+                    onDelete={handleDeletePhoto}
+                  />
+                ))}
               </div>
             )}
           </div>
@@ -796,107 +640,135 @@ export default function AdminDashboardPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {brands.map((brand) => (
-                <div
-                  key={brand.id || brand.slug}
-                  className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden flex flex-col justify-between hover:border-[#C9A961]/60 transition-all shadow-lg"
-                >
-                  <div>
-                    {/* Cover Banner Preview */}
-                    <div className="relative aspect-[16/9] bg-neutral-950 overflow-hidden">
-                      <Image
-                        src={brand.cover_image}
-                        alt={brand.title}
-                        fill
-                        sizes="(max-width: 768px) 100vw, 50vw"
-                        className="object-cover"
-                        unoptimized
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/40 to-transparent" />
-                      <div className="absolute bottom-4 left-4 right-4 text-white">
-                        <span className="text-[10px] uppercase tracking-widest text-[#C9A961] font-semibold block">
-                          Cover Banner Halaman
-                        </span>
-                        <h3 className="font-serif-heading text-xl font-bold">
-                          {brand.title}
-                        </h3>
-                        <p className="text-xs text-neutral-300 font-light line-clamp-1">
-                          {brand.tagline}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="p-5 space-y-2">
-                      <p className="text-xs text-neutral-400 font-light line-clamp-2 leading-relaxed">
-                        {brand.description}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-neutral-950/80 border-t border-neutral-800 flex items-center justify-between">
-                    <a
-                      href={`/${brand.slug}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-neutral-400 hover:text-white flex items-center gap-1 underline"
-                    >
-                      <span>Lihat Halaman {brand.title}</span>
-                      <Eye className="w-3.5 h-3.5 text-[#C9A961]" />
-                    </a>
-
-                    <button
-                      onClick={() => openEditBrandModal(brand)}
-                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md"
-                    >
-                      <Crop className="w-3.5 h-3.5" />
-                      <span>Ganti Banner & Crop</span>
-                    </button>
-                  </div>
-                </div>
+                <BrandCard key={brand.id || brand.slug} brand={brand} onEdit={openEditBrandModal} />
               ))}
             </div>
           </div>
         )}
 
-        {/* TAB 3: PENGATURAN KONTAK */}
+        {/* TAB 3: GAMBAR ABOUT & PENGATURAN KONTAK */}
         {activeTab === "settings" && (
-          <div className="bg-neutral-900 p-8 rounded-2xl border border-neutral-800 space-y-6">
-            <div>
-              <h2 className="font-serif-heading text-xl font-bold text-white">
-                Pengaturan Kontak & WhatsApp Utama
-              </h2>
-              <p className="text-xs text-neutral-400 font-light">
-                Perbarui nomor WhatsApp utama, email, dan alamat studio Anda.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300">
-                  Nomor WhatsApp Utama
-                </label>
-                <input
-                  type="text"
-                  value={settings.whatsapp_number}
-                  onChange={(e) => setSettings({ ...settings, whatsapp_number: e.target.value })}
-                  placeholder="Format: 6281234567890"
-                  className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
-                />
+          <form onSubmit={handleSaveSettings} className="space-y-8">
+            {/* Section A: Gambar Section About Prabaswara */}
+            <div className="bg-neutral-900 p-8 rounded-2xl border border-neutral-800 space-y-6">
+              <div>
+                <h2 className="font-serif-heading text-xl font-bold text-white">
+                  Gambar Section &quot;Tentang Prabaswara&quot; (Halaman Utama)
+                </h2>
+                <p className="text-xs text-neutral-400 font-light mt-1">
+                  Ubah 2 gambar yang tampil pada section Tentang Prabaswara di halaman utama di bawah hero.
+                </p>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300">
-                  Email Resmi
-                </label>
-                <input
-                  type="email"
-                  value={settings.email}
-                  onChange={(e) => setSettings({ ...settings, email: e.target.value })}
-                  placeholder="hello@prabaswara.com"
-                  className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Gambar Kiri (Kamera/Kamera Lens) */}
+                <div className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
+                  <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider block">
+                    1. Gambar Kiri (Kamera Studio)
+                  </span>
+
+                  {settings.camera_image_url && (
+                    <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto">
+                      <img
+                        src={settings.camera_image_url}
+                        alt="Camera preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  <label className="cursor-pointer px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-2 transition-all">
+                    <Crop className="w-4 h-4 text-[#C9A961]" />
+                    <span>Pilih & Crop Gambar Kiri</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleSelectFile(e, "settingCamera")}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {/* Gambar Kanan (Fotografer Landscape) */}
+                <div className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
+                  <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider block">
+                    2. Gambar Kanan (Fine Art Landscape)
+                  </span>
+
+                  {settings.about_image_url && (
+                    <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto">
+                      <img
+                        src={settings.about_image_url}
+                        alt="About preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+
+                  <label className="cursor-pointer px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-2 transition-all">
+                    <Crop className="w-4 h-4 text-[#C9A961]" />
+                    <span>Pilih & Crop Gambar Kanan</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handleSelectFile(e, "settingAbout")}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
+
+            {/* Section B: Nomor WA & Email */}
+            <div className="bg-neutral-900 p-8 rounded-2xl border border-neutral-800 space-y-6">
+              <div>
+                <h2 className="font-serif-heading text-xl font-bold text-white">
+                  Pengaturan Kontak & WhatsApp Utama
+                </h2>
+                <p className="text-xs text-neutral-400 font-light">
+                  Perbarui nomor WhatsApp utama dan email resmi studio Anda.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300">
+                    Nomor WhatsApp Utama
+                  </label>
+                  <input
+                    type="text"
+                    value={settings.whatsapp_number}
+                    onChange={(e) => setSettings({ ...settings, whatsapp_number: e.target.value })}
+                    placeholder="Format: 6281234567890"
+                    className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300">
+                    Email Resmi
+                  </label>
+                  <input
+                    type="email"
+                    value={settings.email}
+                    onChange={(e) => setSettings({ ...settings, email: e.target.value })}
+                    placeholder="hello@prabaswara.com"
+                    className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-end">
+                <button
+                  type="submit"
+                  className="px-8 py-3.5 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Simpan Seluruh Pengaturan Website</span>
+                </button>
+              </div>
+            </div>
+          </form>
         )}
       </div>
 
@@ -1082,7 +954,13 @@ export default function AdminDashboardPage() {
                 <div className="p-4 border-t border-neutral-800 shrink-0 bg-neutral-950/90 flex items-center justify-end gap-3 z-10">
                   <button
                     type="button"
-                    onClick={() => setModalMode("form")}
+                    onClick={() => {
+                      if (cropperTarget === "settingCamera" || cropperTarget === "settingAbout") {
+                        setShowPhotoModal(false);
+                      } else {
+                        setModalMode("form");
+                      }
+                    }}
                     className="px-5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold uppercase tracking-wider cursor-pointer"
                   >
                     Batal
@@ -1191,7 +1069,7 @@ export default function AdminDashboardPage() {
                       />
                     </label>
 
-                    {/* Image Preview Window showing current OR newly uploaded photo */}
+                    {/* Image Preview Window */}
                     {photoForm.imageUrl && (
                       <div className="space-y-1.5 pt-2">
                         <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1.5">
@@ -1240,7 +1118,7 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
 
-                  {/* Sub-Brand Selection (Location on Website) */}
+                  {/* Sub-Brand Selection */}
                   <div>
                     <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
                       Pilih Lokasi Sub-Brand Website *

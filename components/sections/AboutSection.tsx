@@ -107,11 +107,15 @@ export default function AboutSection({ settings }: AboutSectionProps) {
           >
             <div className="col-span-7 relative aspect-[3/4] rounded-2xl overflow-hidden border border-neutral-200/80 shadow-md">
               <Image
-                src="https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop"
+                src={
+                  settings?.cameraImageUrl ||
+                  "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop"
+                }
                 alt="Studio Prabaswara Camera"
                 fill
                 sizes="(max-width: 1024px) 50vw, 30vw"
                 className="object-cover"
+                unoptimized
               />
             </div>
             <div
@@ -119,11 +123,15 @@ export default function AboutSection({ settings }: AboutSectionProps) {
               className="col-span-5 relative aspect-[3/4] rounded-2xl overflow-hidden border border-neutral-200/80 shadow-md translate-y-8"
             >
               <Image
-                src="https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=800&auto=format&fit=crop"
+                src={
+                  settings?.aboutImageUrl ||
+                  "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=800&auto=format&fit=crop"
+                }
                 alt="Fine Art Photography"
                 fill
                 sizes="(max-width: 1024px) 50vw, 30vw"
                 className="object-cover"
+                unoptimized
               />
             </div>
           </motion.div>

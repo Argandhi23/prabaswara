@@ -38,6 +38,8 @@ export async function getSiteSettings(): Promise<SiteSettingsData> {
       instagramUrl: data.instagram_url || MOCK_SITE_SETTINGS.instagramUrl,
       youtubeUrl: data.youtube_url || MOCK_SITE_SETTINGS.youtubeUrl,
       ogImageUrl: data.og_image_url || MOCK_SITE_SETTINGS.ogImageUrl,
+      aboutImageUrl: data.about_image_url || MOCK_SITE_SETTINGS.aboutImageUrl,
+      cameraImageUrl: data.camera_image_url || MOCK_SITE_SETTINGS.cameraImageUrl,
     };
   } catch (error) {
     console.warn("Error fetching site settings from Supabase:", error);
