@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { X, ArrowUpRight, ChevronDown, Camera, Image as ImageIcon, Calendar, Heart } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Camera, Image as ImageIcon, Calendar, Heart } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
 
@@ -35,12 +35,42 @@ const BRAND_SERVICES = [
   },
 ];
 
-// Sleek 2-Line Mobile Hamburger Menu Icon
-const TwoLineIcon = () => (
-  <div className="w-6 h-4 flex flex-col justify-between items-end cursor-pointer group">
-    <span className="w-6 h-[2px] bg-[#C9A961] rounded-full transition-all group-hover:bg-white" />
-    <span className="w-4 h-[2px] bg-white rounded-full transition-all group-hover:w-6 group-hover:bg-[#C9A961]" />
-  </div>
+// Animated Morphing 2-Line to X Mobile Icon Component
+const MorphingMenuButton = ({
+  isOpen,
+  onClick,
+}: {
+  isOpen: boolean;
+  onClick: () => void;
+}) => (
+  <button
+    onClick={onClick}
+    className="lg:hidden p-3 rounded-full bg-neutral-900/90 border border-neutral-800 focus:outline-none transition-transform active:scale-90 flex items-center justify-center cursor-pointer"
+    aria-label="Toggle menu"
+  >
+    <div className="w-6 h-5 relative flex items-center justify-center">
+      {/* Top Line */}
+      <motion.span
+        animate={
+          isOpen
+            ? { rotate: 45, y: 0, backgroundColor: "#C9A961", width: "22px" }
+            : { rotate: 0, y: -5, backgroundColor: "#C9A961", width: "24px" }
+        }
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+        className="h-[2px] rounded-full absolute"
+      />
+      {/* Bottom Line */}
+      <motion.span
+        animate={
+          isOpen
+            ? { rotate: -45, y: 0, backgroundColor: "#C9A961", width: "22px" }
+            : { rotate: 0, y: 5, backgroundColor: "#FFFFFF", width: "16px" }
+        }
+        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+        className="h-[2px] rounded-full absolute ml-auto"
+      />
+    </div>
+  </button>
 );
 
 export default function Navbar() {
@@ -246,14 +276,11 @@ export default function Navbar() {
             </a>
           </div>
 
-          {/* Mobile 2-Line Toggle Button */}
-          <button
-            onClick={() => setMobileMenuOpen(true)}
-            className="lg:hidden p-2 text-white focus:outline-none transition-transform active:scale-90"
-            aria-label="Open full screen menu"
-          >
-            <TwoLineIcon />
-          </button>
+          {/* Mobile Morphing 2-Line Button */}
+          <MorphingMenuButton
+            isOpen={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          />
         </div>
       </header>
 
@@ -281,14 +308,11 @@ export default function Navbar() {
                 </div>
               </Link>
 
-              {/* Close Button X Icon */}
-              <button
+              {/* Animated Morphing Close Button */}
+              <MorphingMenuButton
+                isOpen={mobileMenuOpen}
                 onClick={() => setMobileMenuOpen(false)}
-                className="p-3 rounded-full bg-neutral-900 border border-neutral-800 text-white hover:text-[#C9A961] transition-colors cursor-pointer"
-                aria-label="Close menu"
-              >
-                <X className="w-6 h-6" />
-              </button>
+              />
             </div>
 
             {/* Center Area: Full Screen Menu Navigation Links */}

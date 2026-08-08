@@ -3,6 +3,24 @@ import { verifyAdminSession } from "@/lib/adminAuth";
 import { supabase } from "@/lib/supabase/client";
 import { revalidatePath } from "next/cache";
 
+export async function GET() {
+  try {
+    const { data, error } = await supabase
+      .from("site_settings")
+      .select("*")
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ settings: data || null });
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const isAuth = await verifyAdminSession();
@@ -26,15 +44,15 @@ export async function POST(req: NextRequest) {
     const { data: existing } = await supabase.from("site_settings").select("id").limit(1).maybeSingle();
 
     const payload: any = {
-      company_name: companyName,
-      tagline,
-      about_text: aboutText,
-      whatsapp_number: whatsappNumber,
-      default_whatsapp_message: defaultWhatsappMessage,
-      address,
-      email,
-      instagram_url: instagramUrl,
-      youtube_url: youtubeUrl,
+      company_name: companyName || "Prabaswara",
+      tagline: tagline || "Photography & Creative Visual Studio",
+      about_text: aboutText || "",
+      whatsapp_number: whatsappNumber || "6281234567890",
+      default_whatsapp_message: defaultWhatsappMessage || "",
+      address: address || "",
+      email: email || "",
+      instagram_url: instagramUrl || "",
+      youtube_url: youtubeUrl || "",
       updated_at: new Date().toISOString(),
     };
 
