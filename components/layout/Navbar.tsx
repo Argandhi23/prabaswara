@@ -72,13 +72,13 @@ export default function Navbar() {
           href="/"
           className="shrink-0 flex items-center transition-all duration-300 hover:opacity-85 active:scale-95"
         >
-          <div className="relative h-12 w-48 sm:h-14 sm:w-56">
+          <div className="relative h-16 w-60 sm:h-20 sm:w-72 shrink-0">
             <Image
               src="/logo.png"
               alt="Prabaswara Logo"
               fill
-              sizes="224px"
-              className="object-contain object-left"
+              sizes="288px"
+              className="object-contain object-left scale-110 origin-left"
               priority
             />
           </div>

@@ -25,6 +25,8 @@ import {
   RefreshCw,
   Check,
   Frame,
+  Layers,
+  Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -37,6 +39,17 @@ interface Photo {
   brand_title: string;
   is_featured: boolean;
   aspect_ratio: string;
+  display_order: number;
+}
+
+interface Brand {
+  id: string;
+  slug: string;
+  title: string;
+  tagline: string;
+  description: string;
+  cover_image: string;
+  whatsapp_message: string;
   display_order: number;
 }
 
@@ -54,11 +67,12 @@ interface SiteSettings {
 
 export default function AdminDashboardPage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState<"photos" | "settings">("photos");
+  const [activeTab, setActiveTab] = useState<"photos" | "brands" | "settings">("photos");
   const [locationFilter, setLocationFilter] = useState<string>("all");
 
   // Data States
   const [photos, setPhotos] = useState<Photo[]>([]);
+  const [brands, setBrands] = useState<Brand[]>([]);
   const [settings, setSettings] = useState<SiteSettings>({
     company_name: "Prabaswara",
     tagline: "Photography & Creative Visual Studio",
@@ -77,6 +91,20 @@ export default function AdminDashboardPage() {
   // Photo Modal State (Single Modal Flow)
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
+
+  // Brand Cover Modal State
+  const [showBrandModal, setShowBrandModal] = useState(false);
+  const [editingBrand, setEditingBrand] = useState<Brand | null>(null);
+  const [brandForm, setBrandForm] = useState({
+    id: "",
+    slug: "",
+    title: "",
+    tagline: "",
+    coverImage: "",
+  });
+
+  // Target Mode for Cropper: "photo" or "brand"
+  const [cropperTarget, setCropperTarget] = useState<"photo" | "brand">("photo");
   const [modalMode, setModalMode] = useState<"form" | "crop">("form");
 
   // Cropper State
@@ -130,9 +158,15 @@ export default function AdminDashboardPage() {
   async function fetchData() {
     setLoading(true);
     try {
-      const resPhotos = await fetch("/api/admin/photos");
+      const [resPhotos, resBrands] = await Promise.all([
+        fetch("/api/admin/photos"),
+        fetch("/api/admin/brands"),
+      ]);
       const dataPhotos = await resPhotos.json();
+      const dataBrands = await resBrands.json();
+
       if (dataPhotos.photos) setPhotos(dataPhotos.photos);
+      if (dataBrands.brands) setBrands(dataBrands.brands);
     } catch (err) {
       console.error("Error fetching data:", err);
     } finally {
@@ -145,11 +179,15 @@ export default function AdminDashboardPage() {
     router.push("/admin/login");
   };
 
-  // Step 1: Select File -> Enter Crop Mode inside SAME Modal
-  const handleSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Step 1: Select File for Photo OR Brand Cover
+  const handleSelectFile = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    target: "photo" | "brand"
+  ) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setCropperTarget(target);
     const reader = new FileReader();
     reader.onload = () => {
       if (reader.result) {
@@ -158,13 +196,14 @@ export default function AdminDashboardPage() {
         setCropRotation(0);
         setCropOffsetX(0);
         setCropOffsetY(0);
+        setCropRatio(target === "brand" ? "landscape" : "portrait");
         setModalMode("crop");
       }
     };
     reader.readAsDataURL(file);
   };
 
-  // Step 2: Crop & Upload -> Update Form State -> Return to Form Mode
+  // Step 2: Crop & Upload
   const handleApplyCropAndUpload = async () => {
     if (!cropperImageRef.current) return;
     setIsCropping(true);
@@ -224,7 +263,7 @@ export default function AdminDashboardPage() {
 
       if (!blob) throw new Error("Gagal memproses blob WebP.");
 
-      // Upload to Supabase Storage API
+      // Upload to Supabase Storage
       const formData = new FormData();
       formData.append("file", blob, `cropped-${Date.now()}.webp`);
 
@@ -237,12 +276,18 @@ export default function AdminDashboardPage() {
 
       if (!res.ok) throw new Error(uploadResult.error || "Gagal mengunggah gambar.");
 
-      // UPDATE STATE IMMEDIATELY WITH NEW SUPABASE STORAGE URL
-      setPhotoForm((prev) => ({
-        ...prev,
-        imageUrl: uploadResult.url,
-        aspectRatio: cropRatio === "free" ? "portrait" : cropRatio,
-      }));
+      if (cropperTarget === "photo") {
+        setPhotoForm((prev) => ({
+          ...prev,
+          imageUrl: uploadResult.url,
+          aspectRatio: cropRatio === "free" ? "portrait" : cropRatio,
+        }));
+      } else {
+        setBrandForm((prev) => ({
+          ...prev,
+          coverImage: uploadResult.url,
+        }));
+      }
 
       showToast("Gambar baru berhasil di-crop & diunggah ke Supabase!", "success");
       setModalMode("form");
@@ -253,7 +298,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  // Step 3: Save Photo Record to Database
+  // Save Photo
   const handleSavePhoto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!photoForm.title || !photoForm.imageUrl) {
@@ -274,7 +319,6 @@ export default function AdminDashboardPage() {
       });
 
       const data = await res.json();
-
       if (!res.ok) throw new Error(data.error || "Gagal menyimpan foto");
 
       showToast(
@@ -283,6 +327,33 @@ export default function AdminDashboardPage() {
       );
       setShowPhotoModal(false);
       resetPhotoForm();
+      fetchData();
+      router.refresh();
+    } catch (err: any) {
+      showToast(err.message || "Terjadi kesalahan", "error");
+    }
+  };
+
+  // Save Brand Cover Image
+  const handleSaveBrand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!brandForm.slug || !brandForm.coverImage) {
+      showToast("Pilih Cover Image baru terlebih dahulu!", "error");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/admin/brands", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(brandForm),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal menyimpan cover brand");
+
+      showToast(`Cover banner untuk ${brandForm.title} berhasil diperbarui!`, "success");
+      setShowBrandModal(false);
       fetchData();
       router.refresh();
     } catch (err: any) {
@@ -312,12 +383,14 @@ export default function AdminDashboardPage() {
   const openAddPhotoModal = () => {
     resetPhotoForm();
     setEditingPhoto(null);
+    setCropperTarget("photo");
     setModalMode("form");
     setShowPhotoModal(true);
   };
 
   const openEditPhotoModal = (photo: Photo) => {
     setEditingPhoto(photo);
+    setCropperTarget("photo");
     setPhotoForm({
       title: photo.title,
       imageUrl: photo.image_url,
@@ -330,6 +403,20 @@ export default function AdminDashboardPage() {
     });
     setModalMode("form");
     setShowPhotoModal(true);
+  };
+
+  const openEditBrandModal = (brand: Brand) => {
+    setEditingBrand(brand);
+    setCropperTarget("brand");
+    setBrandForm({
+      id: brand.id,
+      slug: brand.slug,
+      title: brand.title,
+      tagline: brand.tagline || "",
+      coverImage: brand.cover_image,
+    });
+    setModalMode("form");
+    setShowBrandModal(true);
   };
 
   const resetPhotoForm = () => {
@@ -397,25 +484,25 @@ export default function AdminDashboardPage() {
         )}
       </AnimatePresence>
 
-      {/* Top Header */}
-      <header className="border-b border-neutral-800 bg-neutral-900/90 backdrop-blur-md sticky top-0 z-40 px-6 py-3.5 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="relative w-36 h-10 shrink-0">
+      {/* Top Header with ENLARGED PROMINENT LOGO */}
+      <header className="border-b border-neutral-800 bg-neutral-900/90 backdrop-blur-md sticky top-0 z-40 px-6 py-4 flex items-center justify-between">
+        <div className="flex items-center gap-5">
+          <div className="relative w-52 h-14 shrink-0">
             <Image
               src="/logo.png"
               alt="Prabaswara Logo"
               fill
-              sizes="144px"
-              className="object-contain object-left"
+              sizes="208px"
+              className="object-contain object-left scale-110 origin-left"
               priority
             />
           </div>
-          <div className="hidden sm:block pl-4 border-l border-neutral-800">
-            <h1 className="font-serif-heading text-base font-bold text-white tracking-wide">
+          <div className="hidden sm:block pl-5 border-l border-neutral-800">
+            <h1 className="font-serif-heading text-lg font-bold text-white tracking-wide">
               Admin Panel
             </h1>
-            <p className="text-[10px] text-[#C9A961] uppercase tracking-widest font-semibold">
-              Management Portofolio & Galeri Foto
+            <p className="text-[11px] text-[#C9A961] uppercase tracking-widest font-semibold">
+              Management Portofolio & Cover Sub-Brand
             </p>
           </div>
         </div>
@@ -425,17 +512,17 @@ export default function AdminDashboardPage() {
             href="/"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-300 transition-colors"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-300 transition-colors"
           >
             <span>Buka Website Utama</span>
-            <ExternalLink className="w-3.5 h-3.5 text-[#C9A961]" />
+            <ExternalLink className="w-4 h-4 text-[#C9A961]" />
           </a>
 
           <button
             onClick={handleLogout}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-950/50 hover:bg-red-900/70 border border-red-800/80 text-xs font-semibold text-red-300 transition-colors cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-950/50 hover:bg-red-900/70 border border-red-800/80 text-xs font-semibold text-red-300 transition-colors cursor-pointer"
           >
-            <LogOut className="w-3.5 h-3.5" />
+            <LogOut className="w-4 h-4" />
             <span>Keluar</span>
           </button>
         </div>
@@ -443,35 +530,17 @@ export default function AdminDashboardPage() {
 
       {/* Main Area */}
       <div className="flex-1 max-w-7xl w-full mx-auto p-6 md:p-8 space-y-8">
-        {/* EXPLANATORY BANNER: HOW IMAGES & LOCATION WORK */}
+        {/* EXPLANATORY BANNER */}
         <div className="bg-gradient-to-r from-neutral-900 via-neutral-900 to-[#C9A961]/10 border border-[#C9A961]/40 p-6 rounded-2xl space-y-3 relative overflow-hidden shadow-lg">
           <div className="flex items-start gap-3">
             <Info className="w-6 h-6 text-[#C9A961] shrink-0 mt-0.5" />
             <div className="space-y-1">
               <h3 className="font-serif-heading text-lg font-bold text-white flex items-center gap-2">
-                <span>Panduan Mengganti Foto Website</span>
+                <span>Pusat Pengelolaan Gambar & Portofolio Prabaswara</span>
               </h3>
               <p className="text-xs text-neutral-300 font-light leading-relaxed">
-                Pilih foto yang ingin diganti di bawah, klik <strong>Edit Foto & Caption</strong>, lalu pilih file gambar baru untuk dipotong (crop) dan disimpan. Gambar di website utama akan otomatis ter-update seketika!
+                Anda dapat mengubah **Foto Karya Galeri** di Tab 1, atau mengganti **Cover Banner 4 Sub-Brand Utama** (Swara Gallery, Studio, Moment, Wedding) di Tab 2. Seluruh gambar baru dapat dipotong (crop) dan otomatis ter-update seketika di website!
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 pt-2">
-                <div className="p-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800 text-[11px] space-y-0.5">
-                  <span className="text-[#C9A961] font-bold block">🌟 Homepage Featured</span>
-                  <span className="text-neutral-400">Tampil di Halaman Utama (`/`)</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800 text-[11px] space-y-0.5">
-                  <span className="text-[#C9A961] font-bold block">🖼️ Swara Gallery</span>
-                  <span className="text-neutral-400">Tampil di `/swara-gallery`</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800 text-[11px] space-y-0.5">
-                  <span className="text-[#C9A961] font-bold block">📸 Swara Studio</span>
-                  <span className="text-neutral-400">Tampil di `/swara-studio`</span>
-                </div>
-                <div className="p-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800 text-[11px] space-y-0.5">
-                  <span className="text-[#C9A961] font-bold block">💍 Swara Wedding</span>
-                  <span className="text-neutral-400">Tampil di `/swara-wedding`</span>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -487,7 +556,19 @@ export default function AdminDashboardPage() {
             }`}
           >
             <Grid className="w-4 h-4" />
-            <span>Kelola Galeri Foto ({photos.length})</span>
+            <span>1. Kelola Galeri Foto Karya ({photos.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("brands")}
+            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
+              activeTab === "brands"
+                ? "bg-[#C9A961] text-neutral-950 shadow-md font-bold"
+                : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span>2. Kelola Banner 4 Sub-Brand ({brands.length})</span>
           </button>
 
           <button
@@ -499,7 +580,7 @@ export default function AdminDashboardPage() {
             }`}
           >
             <Settings className="w-4 h-4" />
-            <span>Pengaturan Kontak & WA</span>
+            <span>3. Pengaturan Kontak & WA</span>
           </button>
         </div>
 
@@ -513,7 +594,7 @@ export default function AdminDashboardPage() {
                   Daftar Foto Portofolio
                 </h2>
                 <p className="text-xs text-neutral-400 font-light">
-                  Klik **Edit Foto & Caption** pada foto mana saja di bawah ini untuk mengganti gambarnya dengan file baru.
+                  Klik **Edit Foto & Caption** pada foto mana saja di bawah untuk mengganti gambarnya dengan file baru.
                 </p>
               </div>
 
@@ -632,19 +713,15 @@ export default function AdminDashboardPage() {
                             fill
                             sizes="(max-width: 640px) 100vw, 33vw"
                             className="object-cover group-hover:scale-105 transition-transform duration-500"
+                            unoptimized
                           />
 
-                          {/* Homepage Featured Badge */}
                           {photo.is_featured && (
                             <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-[#C9A961] text-neutral-950 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-md">
                               <Star className="w-3 h-3 fill-neutral-950" />
                               Tampil di Homepage
                             </span>
                           )}
-
-                          <span className="absolute bottom-3 right-3 px-2.5 py-1 rounded-md bg-neutral-950/80 backdrop-blur-md border border-white/10 text-[10px] text-neutral-300 font-mono">
-                            {photo.aspect_ratio}
-                          </span>
                         </div>
 
                         {/* Content Info & Location Badge */}
@@ -705,7 +782,82 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* TAB 2: PENGATURAN KONTAK */}
+        {/* TAB 2: KELOLA COVER BANNER 4 SUB-BRAND */}
+        {activeTab === "brands" && (
+          <div className="space-y-6">
+            <div className="bg-neutral-900 p-6 rounded-2xl border border-neutral-800">
+              <h2 className="font-serif-heading text-xl font-bold text-white">
+                Gambar Cover Banner 4 Sub-Brand Prabaswara
+              </h2>
+              <p className="text-xs text-neutral-400 font-light mt-1">
+                Ganti gambar utama/banner untuk Swara Gallery, Swara Studio, Swara Moment, dan Swara Wedding. Gambar ini yang tampil di Hero Showcase dan Halaman Layanan!
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {brands.map((brand) => (
+                <div
+                  key={brand.id || brand.slug}
+                  className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden flex flex-col justify-between hover:border-[#C9A961]/60 transition-all shadow-lg"
+                >
+                  <div>
+                    {/* Cover Banner Preview */}
+                    <div className="relative aspect-[16/9] bg-neutral-950 overflow-hidden">
+                      <Image
+                        src={brand.cover_image}
+                        alt={brand.title}
+                        fill
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                        className="object-cover"
+                        unoptimized
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-neutral-950/40 to-transparent" />
+                      <div className="absolute bottom-4 left-4 right-4 text-white">
+                        <span className="text-[10px] uppercase tracking-widest text-[#C9A961] font-semibold block">
+                          Cover Banner Halaman
+                        </span>
+                        <h3 className="font-serif-heading text-xl font-bold">
+                          {brand.title}
+                        </h3>
+                        <p className="text-xs text-neutral-300 font-light line-clamp-1">
+                          {brand.tagline}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-5 space-y-2">
+                      <p className="text-xs text-neutral-400 font-light line-clamp-2 leading-relaxed">
+                        {brand.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-neutral-950/80 border-t border-neutral-800 flex items-center justify-between">
+                    <a
+                      href={`/${brand.slug}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-neutral-400 hover:text-white flex items-center gap-1 underline"
+                    >
+                      <span>Lihat Halaman {brand.title}</span>
+                      <Eye className="w-3.5 h-3.5 text-[#C9A961]" />
+                    </a>
+
+                    <button
+                      onClick={() => openEditBrandModal(brand)}
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md"
+                    >
+                      <Crop className="w-3.5 h-3.5" />
+                      <span>Ganti Banner & Crop</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: PENGATURAN KONTAK */}
         {activeTab === "settings" && (
           <div className="bg-neutral-900 p-8 rounded-2xl border border-neutral-800 space-y-6">
             <div>
@@ -748,8 +900,8 @@ export default function AdminDashboardPage() {
         )}
       </div>
 
-      {/* SINGLE UNIFIED MODAL FOR EDIT / CROP / UPLOAD */}
-      {showPhotoModal && (
+      {/* SINGLE UNIFIED MODAL FOR PHOTO / CROP / BRAND COVER */}
+      {(showPhotoModal || showBrandModal) && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -763,6 +915,8 @@ export default function AdminDashboardPage() {
                 <h3 className="font-serif-heading text-xl font-bold text-white">
                   {modalMode === "crop"
                     ? "Editor Potong Gambar (Crop)"
+                    : showBrandModal
+                    ? `Ganti Cover Banner ${brandForm.title}`
                     : editingPhoto
                     ? "Edit Foto & Caption Karya"
                     : "Upload Foto Karya Baru"}
@@ -770,7 +924,7 @@ export default function AdminDashboardPage() {
                 <p className="text-xs text-neutral-400 font-light">
                   {modalMode === "crop"
                     ? "Sesuaikan proporsi foto lalu klik Terapkan Crop."
-                    : "Pilih file gambar baru untuk dipotong (crop) atau isi judul/caption."}
+                    : "Pilih file gambar baru untuk dipotong (crop) dan diunggah."}
                 </p>
               </div>
 
@@ -780,6 +934,7 @@ export default function AdminDashboardPage() {
                     setModalMode("form");
                   } else {
                     setShowPhotoModal(false);
+                    setShowBrandModal(false);
                   }
                 }}
                 className="p-2 rounded-full bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
@@ -946,8 +1101,72 @@ export default function AdminDashboardPage() {
               </div>
             )}
 
-            {/* MODE 2: FORM VIEW */}
-            {modalMode === "form" && (
+            {/* MODE 2A: BRAND COVER EDIT FORM */}
+            {modalMode === "form" && showBrandModal && (
+              <form onSubmit={handleSaveBrand} className="flex-1 flex flex-col overflow-hidden">
+                <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
+                  <div className="space-y-3">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block">
+                      Ganti File Gambar Cover Banner *
+                    </label>
+
+                    <label className="cursor-pointer flex flex-col items-center justify-center p-6 border-2 border-dashed border-neutral-700 hover:border-[#C9A961] rounded-2xl bg-neutral-950 transition-all text-center group">
+                      <Crop className="w-6 h-6 text-[#C9A961] mb-2 group-hover:scale-110 transition-transform" />
+                      <span className="text-xs font-bold text-white">
+                        Pilih File Cover Banner Baru (Buka Editor Crop)
+                      </span>
+                      <span className="text-[10px] text-neutral-400 mt-1">
+                        Pilih file gambar untuk memotong rasio banner secara interaktif
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/avif"
+                        onChange={(e) => handleSelectFile(e, "brand")}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {brandForm.coverImage && (
+                      <div className="space-y-1.5 pt-2">
+                        <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1.5">
+                          <CheckCircle className="w-4 h-4 text-emerald-400" />
+                          <span>Pratinjau Banner Baru Siap Disimpan:</span>
+                        </span>
+                        <div className="relative aspect-[16/9] rounded-2xl overflow-hidden border-2 border-[#C9A961]/60 bg-neutral-950 shadow-lg flex items-center justify-center">
+                          <img
+                            key={brandForm.coverImage}
+                            src={brandForm.coverImage}
+                            alt="Cover Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 border-t border-neutral-800 shrink-0 bg-neutral-950/90 flex items-center justify-end gap-3 z-10">
+                  <button
+                    type="button"
+                    onClick={() => setShowBrandModal(false)}
+                    className="px-5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold uppercase tracking-wider cursor-pointer"
+                  >
+                    Batal
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider shadow-lg active:scale-95 cursor-pointer flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Simpan Banner Sub-Brand</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* MODE 2B: PHOTO EDIT FORM */}
+            {modalMode === "form" && showPhotoModal && (
               <form onSubmit={handleSavePhoto} className="flex-1 flex flex-col overflow-hidden">
                 <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
                   {/* File Selector Button */}
@@ -967,7 +1186,7 @@ export default function AdminDashboardPage() {
                       <input
                         type="file"
                         accept="image/jpeg,image/png,image/webp,image/avif"
-                        onChange={handleSelectFile}
+                        onChange={(e) => handleSelectFile(e, "photo")}
                         className="hidden"
                       />
                     </label>

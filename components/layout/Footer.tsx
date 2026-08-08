@@ -30,13 +30,13 @@ export default function Footer({ settings }: FooterProps) {
           {/* Brand Info */}
           <div className="md:col-span-5 space-y-6">
             <Link href="/" className="inline-block transition-opacity duration-300 hover:opacity-85">
-              <div className="relative h-9 w-36 sm:w-44">
+              <div className="relative h-16 w-56 sm:h-18 sm:w-64">
                 <Image
                   src="/logo.png"
                   alt="Prabaswara Logo"
                   fill
-                  sizes="176px"
-                  className="object-contain object-left"
+                  sizes="256px"
+                  className="object-contain object-left scale-110 origin-left"
                 />
               </div>
             </Link>
