@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📷 Prabaswara Photography & Visual Studio
 
-## Getting Started
+Website Landing Page & Company Profile profesional untuk **Prabaswara** dan 4 sub-brandnya (**Swara Gallery, Swara Studio, Swara Moment, Swara Wedding**). 
 
-First, run the development server:
+Dibangun dengan **Next.js 14 App Router (TypeScript)**, **Tailwind CSS (Monochrome Luxury Theme)**, dan **Supabase (PostgreSQL & Storage)**.
 
+---
+
+## 🌟 Fitur Utama
+
+1. **Luxury Visual Aesthetics:** Desain minimalis mewah serba hitam-putih-emas (`#111111` & `#C9A961`) dengan visual tipografi elegan (*Playfair Display* & *Inter*).
+2. **4 Sub-Brand Sections & Pages:**
+   - **Swara Gallery:** Galeri fine art & fotografi seni.
+   - **Swara Studio:** Portofolio foto studio, portrait & lookbook komersial.
+   - **Swara Moment:** Dokumentasi event & selebrasi.
+   - **Swara Wedding:** Dokumentasi momen pernikahan abadi.
+3. **Custom Admin Panel (`/admin`):**
+   - Halaman admin khusus yang super gampang digunakan.
+   - Fitur upload foto langsung ke Supabase Storage, atur judul, caption, sub-brand, dan status *Featured* di Homepage.
+   - Dilengkapi login keamanan terproteksi cookie HTTP-Only.
+4. **Optimasi Vercel Free Tier (0 Image Transformations):**
+   - Menggunakan `unoptimized: true` sehingga bebas dari kuota 5.000 limit transformasi Vercel.
+5. **Full Lightbox Photo Viewer:**
+   - Modal preview foto resolusi tinggi lengkap dengan tombol langsung *"Konsultasi Foto Ini via WA"*.
+6. **SEO & Social Media Preview:**
+   - Next.js Metadata API & Open Graph per halaman untuk preview link yang menarik saat dibagikan ke WhatsApp / Sosial Media.
+
+---
+
+## 🚀 Cara Menjalankan Project Secara Lokal
+
+### 1. Prasyarat
+- Node.js versi 18.x atau lebih baru.
+- Akun Supabase (Gratis).
+
+### 2. Jalankan Dev Server
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+Buka peramban di [http://localhost:3000](http://localhost:3000).
+
+---
+
+## ⚙️ Panduan Setup Supabase & Admin Panel
+
+### 1. Variabel Lingkungan (`.env.local`)
+Buat file `.env.local` di root folder project:
+
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://couougglyiwydtlihpmfq.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key_here
+ADMIN_PASSWORD=your_secure_admin_password
+NEXT_PUBLIC_WHATSAPP_NUMBER=6281234567890
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### 2. Akses Dashboard Admin
+Akses halaman admin di: [http://localhost:3000/admin](http://localhost:3000/admin) (atau `domain-anda.vercel.app/admin`).

@@ -1,0 +1,1089 @@
+"use client";
+
+import { useEffect, useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import Image from "next/image";
+import {
+  Plus,
+  Trash2,
+  Edit,
+  Save,
+  LogOut,
+  Upload,
+  CheckCircle,
+  AlertCircle,
+  Star,
+  Settings,
+  Grid,
+  X,
+  ExternalLink,
+  Info,
+  Eye,
+  Crop,
+  ZoomIn,
+  RotateCw,
+  RefreshCw,
+  Check,
+  Frame,
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
+interface Photo {
+  id: string;
+  title: string;
+  image_url: string;
+  caption: string;
+  brand_slug: string;
+  brand_title: string;
+  is_featured: boolean;
+  aspect_ratio: string;
+  display_order: number;
+}
+
+interface SiteSettings {
+  company_name: string;
+  tagline: string;
+  about_text: string;
+  whatsapp_number: string;
+  default_whatsapp_message: string;
+  address: string;
+  email: string;
+  instagram_url: string;
+  youtube_url: string;
+}
+
+export default function AdminDashboardPage() {
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  const [activeTab, setActiveTab] = useState<"photos" | "settings">("photos");
+  const [locationFilter, setLocationFilter] = useState<string>("all");
+
+  // Data States
+  const [photos, setPhotos] = useState<Photo[]>([]);
+  const [settings, setSettings] = useState<SiteSettings>({
+    company_name: "Prabaswara",
+    tagline: "Photography & Creative Visual Studio",
+    about_text: "",
+    whatsapp_number: "6281234567890",
+    default_whatsapp_message: "",
+    address: "",
+    email: "",
+    instagram_url: "",
+    youtube_url: "",
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+
+  // Photo Modal State (Single Modal Flow)
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [editingPhoto, setEditingPhoto] = useState<Photo | null>(null);
+  const [modalMode, setModalMode] = useState<"form" | "crop">("form");
+
+  // Cropper State
+  const [cropperSrc, setCropperSrc] = useState<string | null>(null);
+  const [cropRatio, setCropRatio] = useState<"portrait" | "landscape" | "square" | "free">("portrait");
+  const [cropZoom, setCropZoom] = useState(1);
+  const [cropRotation, setCropRotation] = useState(0);
+  const [cropOffsetX, setCropOffsetX] = useState(0);
+  const [cropOffsetY, setCropOffsetY] = useState(0);
+  const [isCropping, setIsCropping] = useState(false);
+  const cropperImageRef = useRef<HTMLImageElement | null>(null);
+
+  // Photo Form
+  const [photoForm, setPhotoForm] = useState({
+    title: "",
+    imageUrl: "",
+    caption: "",
+    brandSlug: "swara-gallery",
+    brandTitle: "Swara Gallery",
+    isFeatured: false,
+    aspectRatio: "portrait",
+    displayOrder: 0,
+  });
+
+  const router = useRouter();
+
+  const showToast = (message: string, type: "success" | "error" = "success") => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4500);
+  };
+
+  // Check auth & fetch initial data
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch("/api/admin/auth");
+        const data = await res.json();
+        if (!data.authenticated) {
+          router.push("/admin/login");
+        } else {
+          setAuthenticated(true);
+          fetchData();
+        }
+      } catch {
+        router.push("/admin/login");
+      }
+    }
+    checkAuth();
+  }, [router]);
+
+  async function fetchData() {
+    setLoading(true);
+    try {
+      const resPhotos = await fetch("/api/admin/photos");
+      const dataPhotos = await resPhotos.json();
+      if (dataPhotos.photos) setPhotos(dataPhotos.photos);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const handleLogout = async () => {
+    await fetch("/api/admin/auth", { method: "DELETE" });
+    router.push("/admin/login");
+  };
+
+  // Step 1: Select File -> Enter Crop Mode inside SAME Modal
+  const handleSelectFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result) {
+        setCropperSrc(reader.result as string);
+        setCropZoom(1);
+        setCropRotation(0);
+        setCropOffsetX(0);
+        setCropOffsetY(0);
+        setModalMode("crop");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Step 2: Crop & Upload -> Update Form State -> Return to Form Mode
+  const handleApplyCropAndUpload = async () => {
+    if (!cropperImageRef.current) return;
+    setIsCropping(true);
+
+    try {
+      const img = cropperImageRef.current;
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      if (!ctx) throw new Error("Gagal membuat canvas cropper.");
+
+      const targetRatio =
+        cropRatio === "portrait" ? 3 / 4 : cropRatio === "landscape" ? 4 / 3 : 1;
+
+      let cropWidth = img.naturalWidth;
+      let cropHeight = img.naturalHeight;
+
+      if (cropRatio !== "free") {
+        if (cropWidth / cropHeight > targetRatio) {
+          cropWidth = cropHeight * targetRatio;
+        } else {
+          cropHeight = cropWidth / targetRatio;
+        }
+      }
+
+      const outputWidth = Math.min(1600, Math.round(cropWidth));
+      const outputHeight = Math.min(1600, Math.round(cropHeight));
+
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+
+      ctx.save();
+      ctx.translate(outputWidth / 2, outputHeight / 2);
+      ctx.rotate((cropRotation * Math.PI) / 180);
+      ctx.scale(cropZoom, cropZoom);
+
+      const sourceX = (img.naturalWidth - cropWidth) / 2 + cropOffsetX * (img.naturalWidth / 100);
+      const sourceY = (img.naturalHeight - cropHeight) / 2 + cropOffsetY * (img.naturalHeight / 100);
+
+      ctx.drawImage(
+        img,
+        sourceX,
+        sourceY,
+        cropWidth,
+        cropHeight,
+        -outputWidth / 2,
+        -outputHeight / 2,
+        outputWidth,
+        outputHeight
+      );
+
+      ctx.restore();
+
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob((b) => resolve(b), "image/webp", 0.9)
+      );
+
+      if (!blob) throw new Error("Gagal memproses blob WebP.");
+
+      // Upload to Supabase Storage API
+      const formData = new FormData();
+      formData.append("file", blob, `cropped-${Date.now()}.webp`);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const uploadResult = await res.json();
+
+      if (!res.ok) throw new Error(uploadResult.error || "Gagal mengunggah gambar.");
+
+      // UPDATE STATE IMMEDIATELY WITH NEW SUPABASE STORAGE URL
+      setPhotoForm((prev) => ({
+        ...prev,
+        imageUrl: uploadResult.url,
+        aspectRatio: cropRatio === "free" ? "portrait" : cropRatio,
+      }));
+
+      showToast("Gambar baru berhasil di-crop & diunggah ke Supabase!", "success");
+      setModalMode("form");
+    } catch (err: any) {
+      showToast(err.message || "Gagal memproses crop gambar", "error");
+    } finally {
+      setIsCropping(false);
+    }
+  };
+
+  // Step 3: Save Photo Record to Database
+  const handleSavePhoto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!photoForm.title || !photoForm.imageUrl) {
+      showToast("Judul dan Gambar wajib diisi!", "error");
+      return;
+    }
+
+    try {
+      const method = editingPhoto ? "PUT" : "POST";
+      const payload = editingPhoto
+        ? { id: editingPhoto.id, ...photoForm }
+        : photoForm;
+
+      const res = await fetch("/api/admin/photos", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Gagal menyimpan foto");
+
+      showToast(
+        editingPhoto ? "Foto & Caption berhasil diperbarui!" : "Foto baru berhasil disimpan!",
+        "success"
+      );
+      setShowPhotoModal(false);
+      resetPhotoForm();
+      fetchData();
+      router.refresh();
+    } catch (err: any) {
+      showToast(err.message || "Terjadi kesalahan", "error");
+    }
+  };
+
+  // Delete Photo
+  const handleDeletePhoto = async (id: string) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus foto ini dari website?")) return;
+
+    try {
+      const res = await fetch(`/api/admin/photos?id=${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Gagal menghapus foto");
+
+      showToast("Foto berhasil dihapus!", "success");
+      fetchData();
+      router.refresh();
+    } catch (err: any) {
+      showToast(err.message || "Gagal menghapus foto", "error");
+    }
+  };
+
+  const openAddPhotoModal = () => {
+    resetPhotoForm();
+    setEditingPhoto(null);
+    setModalMode("form");
+    setShowPhotoModal(true);
+  };
+
+  const openEditPhotoModal = (photo: Photo) => {
+    setEditingPhoto(photo);
+    setPhotoForm({
+      title: photo.title,
+      imageUrl: photo.image_url,
+      caption: photo.caption || "",
+      brandSlug: photo.brand_slug || "swara-gallery",
+      brandTitle: photo.brand_title || "Swara Gallery",
+      isFeatured: photo.is_featured,
+      aspectRatio: photo.aspect_ratio || "portrait",
+      displayOrder: photo.display_order || 0,
+    });
+    setModalMode("form");
+    setShowPhotoModal(true);
+  };
+
+  const resetPhotoForm = () => {
+    setPhotoForm({
+      title: "",
+      imageUrl: "",
+      caption: "",
+      brandSlug: "swara-gallery",
+      brandTitle: "Swara Gallery",
+      isFeatured: false,
+      aspectRatio: "portrait",
+      displayOrder: 0,
+    });
+    setCropperSrc(null);
+  };
+
+  const categoryOptions = [
+    { slug: "swara-gallery", title: "Swara Gallery (Fotografi Seni & Fine Art)", page: "/swara-gallery" },
+    { slug: "swara-studio", title: "Swara Studio (Foto Studio, Portrait & Lookbook)", page: "/swara-studio" },
+    { slug: "swara-moment", title: "Swara Moment (Dokumentasi Event & Selebrasi)", page: "/swara-moment" },
+    { slug: "swara-wedding", title: "Swara Wedding (Foto Pernikahan & Momen Romantis)", page: "/swara-wedding" },
+  ];
+
+  const filteredPhotos = photos.filter((p) => {
+    if (locationFilter === "all") return true;
+    if (locationFilter === "featured") return p.is_featured;
+    return p.brand_slug === locationFilter;
+  });
+
+  if (authenticated === null || loading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center font-sans-body">
+        <div className="flex flex-col items-center space-y-4">
+          <div className="w-10 h-10 border-2 border-[#C9A961] border-t-transparent rounded-full animate-spin" />
+          <p className="text-xs uppercase tracking-widest text-neutral-400">
+            Memuat Dashboard Admin Prabaswara...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans-body">
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className={`fixed top-6 right-6 z-50 px-5 py-3.5 rounded-2xl border backdrop-blur-xl shadow-2xl flex items-center gap-3 text-xs font-semibold ${
+              toast.type === "success"
+                ? "bg-emerald-950/90 border-emerald-700 text-emerald-200"
+                : "bg-red-950/90 border-red-700 text-red-200"
+            }`}
+          >
+            {toast.type === "success" ? (
+              <CheckCircle className="w-4 h-4 text-emerald-400" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-red-400" />
+            )}
+            <span>{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Top Header */}
+      <header className="border-b border-neutral-800 bg-neutral-900/90 backdrop-blur-md sticky top-0 z-40 px-6 py-3.5 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <div className="relative w-36 h-10 shrink-0">
+            <Image
+              src="/logo.png"
+              alt="Prabaswara Logo"
+              fill
+              sizes="144px"
+              className="object-contain object-left"
+              priority
+            />
+          </div>
+          <div className="hidden sm:block pl-4 border-l border-neutral-800">
+            <h1 className="font-serif-heading text-base font-bold text-white tracking-wide">
+              Admin Panel
+            </h1>
+            <p className="text-[10px] text-[#C9A961] uppercase tracking-widest font-semibold">
+              Management Portofolio & Galeri Foto
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-xs font-medium text-neutral-300 transition-colors"
+          >
+            <span>Buka Website Utama</span>
+            <ExternalLink className="w-3.5 h-3.5 text-[#C9A961]" />
+          </a>
+
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-red-950/50 hover:bg-red-900/70 border border-red-800/80 text-xs font-semibold text-red-300 transition-colors cursor-pointer"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Keluar</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Main Area */}
+      <div className="flex-1 max-w-7xl w-full mx-auto p-6 md:p-8 space-y-8">
+        {/* EXPLANATORY BANNER: HOW IMAGES & LOCATION WORK */}
+        <div className="bg-gradient-to-r from-neutral-900 via-neutral-900 to-[#C9A961]/10 border border-[#C9A961]/40 p-6 rounded-2xl space-y-3 relative overflow-hidden shadow-lg">
+          <div className="flex items-start gap-3">
+            <Info className="w-6 h-6 text-[#C9A961] shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <h3 className="font-serif-heading text-lg font-bold text-white flex items-center gap-2">
+                <span>Panduan Mengganti Foto Website</span>
+              </h3>
+              <p className="text-xs text-neutral-300 font-light leading-relaxed">
+                Pilih foto yang ingin diganti di bawah, klik <strong>Edit Foto & Caption</strong>, lalu pilih file gambar baru untuk dipotong (crop) dan disimpan. Gambar di website utama akan otomatis ter-update seketika!
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5 pt-2">
+                <div className="p-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800 text-[11px] space-y-0.5">
+                  <span className="text-[#C9A961] font-bold block">🌟 Homepage Featured</span>
+                  <span className="text-neutral-400">Tampil di Halaman Utama (`/`)</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800 text-[11px] space-y-0.5">
+                  <span className="text-[#C9A961] font-bold block">🖼️ Swara Gallery</span>
+                  <span className="text-neutral-400">Tampil di `/swara-gallery`</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800 text-[11px] space-y-0.5">
+                  <span className="text-[#C9A961] font-bold block">📸 Swara Studio</span>
+                  <span className="text-neutral-400">Tampil di `/swara-studio`</span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-neutral-950/80 border border-neutral-800 text-[11px] space-y-0.5">
+                  <span className="text-[#C9A961] font-bold block">💍 Swara Wedding</span>
+                  <span className="text-neutral-400">Tampil di `/swara-wedding`</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="flex flex-wrap gap-2 border-b border-neutral-800 pb-4">
+          <button
+            onClick={() => setActiveTab("photos")}
+            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
+              activeTab === "photos"
+                ? "bg-[#C9A961] text-neutral-950 shadow-md font-bold"
+                : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+            }`}
+          >
+            <Grid className="w-4 h-4" />
+            <span>Kelola Galeri Foto ({photos.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("settings")}
+            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
+              activeTab === "settings"
+                ? "bg-[#C9A961] text-neutral-950 shadow-md font-bold"
+                : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            <span>Pengaturan Kontak & WA</span>
+          </button>
+        </div>
+
+        {/* TAB 1: KELOLA FOTO GALERI */}
+        {activeTab === "photos" && (
+          <div className="space-y-6">
+            {/* Header & Add Button */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-neutral-900 p-6 rounded-2xl border border-neutral-800">
+              <div>
+                <h2 className="font-serif-heading text-xl font-bold text-white">
+                  Daftar Foto Portofolio
+                </h2>
+                <p className="text-xs text-neutral-400 font-light">
+                  Klik **Edit Foto & Caption** pada foto mana saja di bawah ini untuk mengganti gambarnya dengan file baru.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={openAddPhotoModal}
+                  className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg active:scale-95"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Tambah Foto Baru</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Filter Buttons */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 pb-2">
+              <span className="text-xs text-neutral-400 font-medium mr-2">Filter Berdasarkan Halaman:</span>
+              <button
+                onClick={() => setLocationFilter("all")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  locationFilter === "all"
+                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
+                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+                }`}
+              >
+                Semua Foto ({photos.length})
+              </button>
+              <button
+                onClick={() => setLocationFilter("featured")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  locationFilter === "featured"
+                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
+                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+                }`}
+              >
+                🌟 Homepage Featured ({photos.filter((p) => p.is_featured).length})
+              </button>
+              <button
+                onClick={() => setLocationFilter("swara-gallery")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  locationFilter === "swara-gallery"
+                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
+                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+                }`}
+              >
+                🖼️ Swara Gallery ({photos.filter((p) => p.brand_slug === "swara-gallery").length})
+              </button>
+              <button
+                onClick={() => setLocationFilter("swara-studio")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  locationFilter === "swara-studio"
+                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
+                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+                }`}
+              >
+                📸 Swara Studio ({photos.filter((p) => p.brand_slug === "swara-studio").length})
+              </button>
+              <button
+                onClick={() => setLocationFilter("swara-moment")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  locationFilter === "swara-moment"
+                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
+                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+                }`}
+              >
+                📅 Swara Moment ({photos.filter((p) => p.brand_slug === "swara-moment").length})
+              </button>
+              <button
+                onClick={() => setLocationFilter("swara-wedding")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  locationFilter === "swara-wedding"
+                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
+                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+                }`}
+              >
+                💍 Swara Wedding ({photos.filter((p) => p.brand_slug === "swara-wedding").length})
+              </button>
+            </div>
+
+            {/* Photos Grid */}
+            {filteredPhotos.length === 0 ? (
+              <div className="text-center py-20 bg-neutral-900/50 rounded-2xl border border-neutral-800/80 space-y-4">
+                <p className="text-sm text-neutral-400">Tidak ada foto untuk lokasi filter ini.</p>
+                <button
+                  onClick={openAddPhotoModal}
+                  className="px-4 py-2 bg-[#C9A961] text-neutral-950 text-xs font-bold rounded-xl uppercase tracking-wider hover:bg-[#B8964E] transition-all cursor-pointer"
+                >
+                  + Tambah Foto Baru
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredPhotos.map((photo) => {
+                  const targetPage =
+                    photo.brand_slug === "swara-gallery"
+                      ? "/swara-gallery"
+                      : photo.brand_slug === "swara-studio"
+                      ? "/swara-studio"
+                      : photo.brand_slug === "swara-moment"
+                      ? "/swara-moment"
+                      : photo.brand_slug === "swara-wedding"
+                      ? "/swara-wedding"
+                      : "/";
+
+                  return (
+                    <div
+                      key={photo.id}
+                      className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden flex flex-col justify-between hover:border-[#C9A961]/60 transition-all shadow-md group"
+                    >
+                      <div>
+                        {/* Image Preview */}
+                        <div className="relative aspect-[4/3] bg-neutral-950 overflow-hidden">
+                          <Image
+                            src={photo.image_url}
+                            alt={photo.title}
+                            fill
+                            sizes="(max-width: 640px) 100vw, 33vw"
+                            className="object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+
+                          {/* Homepage Featured Badge */}
+                          {photo.is_featured && (
+                            <span className="absolute top-3 left-3 px-3 py-1 rounded-full bg-[#C9A961] text-neutral-950 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-md">
+                              <Star className="w-3 h-3 fill-neutral-950" />
+                              Tampil di Homepage
+                            </span>
+                          )}
+
+                          <span className="absolute bottom-3 right-3 px-2.5 py-1 rounded-md bg-neutral-950/80 backdrop-blur-md border border-white/10 text-[10px] text-neutral-300 font-mono">
+                            {photo.aspect_ratio}
+                          </span>
+                        </div>
+
+                        {/* Content Info & Location Badge */}
+                        <div className="p-5 space-y-3">
+                          <div className="p-2.5 rounded-xl bg-neutral-950 border border-neutral-800 text-[11px] space-y-1">
+                            <span className="text-neutral-400 font-medium block">📍 Halaman Website:</span>
+                            <div className="flex items-center justify-between">
+                              <span className="text-[#C9A961] font-bold uppercase tracking-wider">
+                                {photo.brand_title || photo.brand_slug}
+                              </span>
+                              <a
+                                href={targetPage}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-neutral-400 hover:text-white flex items-center gap-1 underline"
+                              >
+                                <span>Lihat</span>
+                                <Eye className="w-3 h-3 text-[#C9A961]" />
+                              </a>
+                            </div>
+                          </div>
+
+                          <h3 className="font-serif-heading text-lg font-bold text-white line-clamp-1">
+                            {photo.title}
+                          </h3>
+
+                          {photo.caption && (
+                            <p className="text-xs text-neutral-400 font-light line-clamp-2 leading-relaxed">
+                              {photo.caption}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions Footer */}
+                      <div className="p-4 bg-neutral-950/80 border-t border-neutral-800 flex items-center justify-between">
+                        <button
+                          onClick={() => openEditPhotoModal(photo)}
+                          className="inline-flex items-center gap-1.5 text-xs text-neutral-300 hover:text-[#C9A961] font-semibold transition-colors cursor-pointer"
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                          <span>Edit Foto & Caption</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleDeletePhoto(photo.id)}
+                          className="inline-flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 font-semibold transition-colors cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>Hapus</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: PENGATURAN KONTAK */}
+        {activeTab === "settings" && (
+          <div className="bg-neutral-900 p-8 rounded-2xl border border-neutral-800 space-y-6">
+            <div>
+              <h2 className="font-serif-heading text-xl font-bold text-white">
+                Pengaturan Kontak & WhatsApp Utama
+              </h2>
+              <p className="text-xs text-neutral-400 font-light">
+                Perbarui nomor WhatsApp utama, email, dan alamat studio Anda.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300">
+                  Nomor WhatsApp Utama
+                </label>
+                <input
+                  type="text"
+                  value={settings.whatsapp_number}
+                  onChange={(e) => setSettings({ ...settings, whatsapp_number: e.target.value })}
+                  placeholder="Format: 6281234567890"
+                  className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300">
+                  Email Resmi
+                </label>
+                <input
+                  type="email"
+                  value={settings.email}
+                  onChange={(e) => setSettings({ ...settings, email: e.target.value })}
+                  placeholder="hello@prabaswara.com"
+                  className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* SINGLE UNIFIED MODAL FOR EDIT / CROP / UPLOAD */}
+      {showPhotoModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-neutral-900 border border-neutral-800 rounded-3xl max-w-xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden my-auto"
+          >
+            {/* Modal Header */}
+            <div className="p-5 border-b border-neutral-800 shrink-0 flex items-center justify-between bg-neutral-900">
+              <div>
+                <h3 className="font-serif-heading text-xl font-bold text-white">
+                  {modalMode === "crop"
+                    ? "Editor Potong Gambar (Crop)"
+                    : editingPhoto
+                    ? "Edit Foto & Caption Karya"
+                    : "Upload Foto Karya Baru"}
+                </h3>
+                <p className="text-xs text-neutral-400 font-light">
+                  {modalMode === "crop"
+                    ? "Sesuaikan proporsi foto lalu klik Terapkan Crop."
+                    : "Pilih file gambar baru untuk dipotong (crop) atau isi judul/caption."}
+                </p>
+              </div>
+
+              <button
+                onClick={() => {
+                  if (modalMode === "crop") {
+                    setModalMode("form");
+                  } else {
+                    setShowPhotoModal(false);
+                  }
+                }}
+                className="p-2 rounded-full bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* MODE 1: CROPPER IN-MODAL VIEW */}
+            {modalMode === "crop" && cropperSrc && (
+              <div className="flex-1 flex flex-col overflow-hidden">
+                <div className="p-5 overflow-y-auto space-y-4 flex-1">
+                  {/* Aspect Ratio Selector */}
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
+                      <Frame className="w-3.5 h-3.5 text-[#C9A961]" />
+                      <span>Pilih Rasio Foto (Aspect Ratio)</span>
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCropRatio("portrait")}
+                        className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                          cropRatio === "portrait"
+                            ? "bg-[#C9A961] text-neutral-950 font-bold shadow-md"
+                            : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                        }`}
+                      >
+                        Portrait (3:4)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCropRatio("landscape")}
+                        className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                          cropRatio === "landscape"
+                            ? "bg-[#C9A961] text-neutral-950 font-bold shadow-md"
+                            : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                        }`}
+                      >
+                        Landscape (4:3)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCropRatio("square")}
+                        className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                          cropRatio === "square"
+                            ? "bg-[#C9A961] text-neutral-950 font-bold shadow-md"
+                            : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                        }`}
+                      >
+                        Square (1:1)
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCropRatio("free")}
+                        className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                          cropRatio === "free"
+                            ? "bg-[#C9A961] text-neutral-950 font-bold shadow-md"
+                            : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                        }`}
+                      >
+                        Asli / Bebas
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Crop Canvas Preview */}
+                  <div className="relative bg-neutral-950 rounded-2xl border border-neutral-800 overflow-hidden flex items-center justify-center p-3 min-h-[220px] max-h-[300px]">
+                    <div
+                      className="relative overflow-hidden transition-all duration-300 border-2 border-dashed border-[#C9A961] shadow-2xl flex items-center justify-center max-h-[260px] mx-auto"
+                      style={{
+                        aspectRatio:
+                          cropRatio === "portrait"
+                            ? "3/4"
+                            : cropRatio === "landscape"
+                            ? "4/3"
+                            : cropRatio === "square"
+                            ? "1/1"
+                            : "auto",
+                      }}
+                    >
+                      <img
+                        ref={cropperImageRef}
+                        src={cropperSrc}
+                        alt="Crop preview"
+                        className="object-cover transition-transform duration-100 max-h-[250px] w-full"
+                        style={{
+                          transform: `scale(${cropZoom}) rotate(${cropRotation}deg) translate(${cropOffsetX}px, ${cropOffsetY}px)`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sliders & Rotate */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-neutral-950 p-3.5 rounded-xl border border-neutral-800">
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-xs text-neutral-400">
+                        <span className="flex items-center gap-1">
+                          <ZoomIn className="w-3.5 h-3.5 text-[#C9A961]" /> Perbesar (Zoom):
+                        </span>
+                        <span className="font-mono text-white font-semibold">{cropZoom.toFixed(1)}x</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="3"
+                        step="0.1"
+                        value={cropZoom}
+                        onChange={(e) => setCropZoom(parseFloat(e.target.value))}
+                        className="w-full accent-[#C9A961] cursor-pointer"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1 sm:pt-0">
+                      <button
+                        type="button"
+                        onClick={() => setCropRotation((prev) => (prev + 90) % 360)}
+                        className="px-3.5 py-2 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-neutral-300 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <RotateCw className="w-3.5 h-3.5 text-[#C9A961]" />
+                        <span>Putar 90°</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCropZoom(1);
+                          setCropRotation(0);
+                          setCropOffsetX(0);
+                          setCropOffsetY(0);
+                        }}
+                        className="px-3.5 py-2 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-neutral-400 hover:text-white flex items-center gap-1 transition-all cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        <span>Reset</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Crop Actions Footer */}
+                <div className="p-4 border-t border-neutral-800 shrink-0 bg-neutral-950/90 flex items-center justify-end gap-3 z-10">
+                  <button
+                    type="button"
+                    onClick={() => setModalMode("form")}
+                    className="px-5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold uppercase tracking-wider cursor-pointer"
+                  >
+                    Batal
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleApplyCropAndUpload}
+                    disabled={isCropping}
+                    className="px-6 py-2.5 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider shadow-lg active:scale-95 cursor-pointer flex items-center gap-2 disabled:opacity-50"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>{isCropping ? "Memproses Crop..." : "Terapkan Crop & Upload"}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* MODE 2: FORM VIEW */}
+            {modalMode === "form" && (
+              <form onSubmit={handleSavePhoto} className="flex-1 flex flex-col overflow-hidden">
+                <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
+                  {/* File Selector Button */}
+                  <div className="space-y-3">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block">
+                      Ganti / Upload File Gambar Foto *
+                    </label>
+
+                    <label className="cursor-pointer flex flex-col items-center justify-center p-6 border-2 border-dashed border-neutral-700 hover:border-[#C9A961] rounded-2xl bg-neutral-950 transition-all text-center group">
+                      <Crop className="w-6 h-6 text-[#C9A961] mb-2 group-hover:scale-110 transition-transform" />
+                      <span className="text-xs font-bold text-white">
+                        Pilih File Gambar Baru (Buka Editor Crop)
+                      </span>
+                      <span className="text-[10px] text-neutral-400 mt-1">
+                        Klik untuk memilih gambar baru dan memotong rasio secara interaktif
+                      </span>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/avif"
+                        onChange={handleSelectFile}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {/* Image Preview Window showing current OR newly uploaded photo */}
+                    {photoForm.imageUrl && (
+                      <div className="space-y-1.5 pt-2">
+                        <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1.5">
+                          <CheckCircle className="w-4 h-4 text-emerald-400" />
+                          <span>Pratinjau Gambar Siap Disimpan:</span>
+                        </span>
+                        <div className="relative aspect-video rounded-2xl overflow-hidden border-2 border-[#C9A961]/60 bg-neutral-950 shadow-lg flex items-center justify-center">
+                          <img
+                            key={photoForm.imageUrl}
+                            src={photoForm.imageUrl}
+                            alt="Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Title & Caption */}
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
+                        Judul Foto / Nama Karya *
+                      </label>
+                      <input
+                        type="text"
+                        value={photoForm.title}
+                        onChange={(e) => setPhotoForm({ ...photoForm, title: e.target.value })}
+                        placeholder="Misal: Sunset Bride / Matrimony at Plataran"
+                        className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
+                        Caption / Keterangan Gambar
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={photoForm.caption}
+                        onChange={(e) => setPhotoForm({ ...photoForm, caption: e.target.value })}
+                        placeholder="Tuliskan cerita atau keterangan singkat foto ini..."
+                        className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sub-Brand Selection (Location on Website) */}
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
+                      Pilih Lokasi Sub-Brand Website *
+                    </label>
+                    <select
+                      value={photoForm.brandSlug}
+                      onChange={(e) => {
+                        const selected = categoryOptions.find((c) => c.slug === e.target.value);
+                        setPhotoForm({
+                          ...photoForm,
+                          brandSlug: e.target.value,
+                          brandTitle: selected?.title.split(" (")[0] || "Swara Gallery",
+                        });
+                      }}
+                      className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
+                    >
+                      {categoryOptions.map((c) => (
+                        <option key={c.slug} value={c.slug}>
+                          {c.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Featured Checkbox */}
+                  <div className="pt-2 flex items-center gap-3 p-3 rounded-xl bg-neutral-950 border border-neutral-800">
+                    <input
+                      type="checkbox"
+                      id="isFeatured"
+                      checked={photoForm.isFeatured}
+                      onChange={(e) => setPhotoForm({ ...photoForm, isFeatured: e.target.checked })}
+                      className="w-4 h-4 rounded border-neutral-700 accent-[#C9A961] cursor-pointer"
+                    />
+                    <label htmlFor="isFeatured" className="text-xs text-neutral-300 cursor-pointer font-medium">
+                      Tampilkan foto ini di <span className="text-[#C9A961] font-bold">Halaman Utama (Homepage Featured)</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Form Actions Footer */}
+                <div className="p-4 border-t border-neutral-800 shrink-0 bg-neutral-950/90 flex items-center justify-end gap-3 z-10">
+                  <button
+                    type="button"
+                    onClick={() => setShowPhotoModal(false)}
+                    className="px-5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold uppercase tracking-wider cursor-pointer"
+                  >
+                    Batal
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider shadow-lg active:scale-95 cursor-pointer flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{editingPhoto ? "Simpan Perubahan" : "Upload & Simpan"}</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </motion.div>
+        </div>
+      )}
+    </div>
+  );
+}
