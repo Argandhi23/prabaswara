@@ -35,7 +35,7 @@ const BRAND_SERVICES = [
   },
 ];
 
-// Animated Morphing 2-Line to X Mobile Icon Component
+// Single Continuous Silky-Smooth Morphing 2-Line to X Menu Icon Component
 const MorphingMenuButton = ({
   isOpen,
   onClick,
@@ -45,29 +45,31 @@ const MorphingMenuButton = ({
 }) => (
   <button
     onClick={onClick}
-    className="lg:hidden p-3 rounded-full bg-neutral-900/90 border border-neutral-800 focus:outline-none transition-transform active:scale-90 flex items-center justify-center cursor-pointer"
-    aria-label="Toggle menu"
+    className="lg:hidden relative z-50 p-2 rounded-xl bg-neutral-900/80 border border-neutral-800 focus:outline-none transition-all active:scale-90 flex items-center justify-center cursor-pointer w-10 h-10 shrink-0"
+    aria-label="Toggle navigation menu"
   >
-    <div className="w-6 h-5 relative flex items-center justify-center">
+    <div className="w-5 h-4 relative flex items-center justify-center pointer-events-none">
       {/* Top Line */}
       <motion.span
+        initial={false}
         animate={
           isOpen
-            ? { rotate: 45, y: 0, backgroundColor: "#C9A961", width: "22px" }
-            : { rotate: 0, y: -5, backgroundColor: "#C9A961", width: "24px" }
+            ? { rotate: 45, y: 0, backgroundColor: "#C9A961", width: "20px" }
+            : { rotate: 0, y: -4, backgroundColor: "#C9A961", width: "20px" }
         }
-        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-        className="h-[2px] rounded-full absolute"
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        className="h-[2px] rounded-full absolute origin-center"
       />
       {/* Bottom Line */}
       <motion.span
+        initial={false}
         animate={
           isOpen
-            ? { rotate: -45, y: 0, backgroundColor: "#C9A961", width: "22px" }
-            : { rotate: 0, y: 5, backgroundColor: "#FFFFFF", width: "16px" }
+            ? { rotate: -45, y: 0, backgroundColor: "#C9A961", width: "20px" }
+            : { rotate: 0, y: 4, backgroundColor: "#FFFFFF", width: "14px" }
         }
-        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-        className="h-[2px] rounded-full absolute ml-auto"
+        transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        className="h-[2px] rounded-full absolute right-0 origin-center"
       />
     </div>
   </button>
@@ -112,9 +114,9 @@ export default function Navbar() {
     <>
       {/* MAIN SLENDER DESKTOP & MOBILE HEADER */}
       <header
-        className={`fixed top-0 left-0 right-0 z-40 transition-all duration-300 ${
-          scrolled
-            ? "bg-[#121212]/92 backdrop-blur-md py-2 shadow-md border-b border-neutral-800/80"
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+          scrolled || mobileMenuOpen
+            ? "bg-[#121212]/95 backdrop-blur-md py-2 shadow-md border-b border-neutral-800/80"
             : "bg-[#121212]/85 backdrop-blur-md py-2.5 border-b border-neutral-800/50"
         }`}
       >
@@ -122,7 +124,8 @@ export default function Navbar() {
           {/* Logo Container (Slim header height, large logo visual) */}
           <Link
             href="/"
-            className="shrink-0 flex items-center transition-all duration-300 hover:opacity-85 active:scale-95"
+            onClick={() => setMobileMenuOpen(false)}
+            className="shrink-0 flex items-center transition-all duration-300 hover:opacity-85 active:scale-95 z-50"
           >
             <div className="relative h-10 sm:h-12 w-48 sm:w-56 shrink-0 flex items-center overflow-visible">
               <Image
@@ -276,7 +279,7 @@ export default function Navbar() {
             </a>
           </div>
 
-          {/* Mobile Morphing 2-Line Button */}
+          {/* Single Continuous Morphing 2-Line Button */}
           <MorphingMenuButton
             isOpen={mobileMenuOpen}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -284,39 +287,18 @@ export default function Navbar() {
         </div>
       </header>
 
-      {/* FULL SCREEN MOBILE OVERLAY MENU (MENUTUP SELURUH LAYAR HP) */}
+      {/* FULL SCREEN MOBILE OVERLAY MENU (MENUTUP SELURUH LAYAR HP DI BAWAH HEADER REUSABLE) */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-            className="fixed inset-0 z-50 bg-[#0F0F0F] text-white flex flex-col justify-between p-6 sm:p-8 min-h-screen overflow-y-auto"
+            initial={{ opacity: 0, y: "-10%" }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: "-10%" }}
+            transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            className="fixed inset-0 z-40 bg-[#0F0F0F] text-white flex flex-col justify-between pt-20 pb-8 px-6 sm:px-8 min-h-screen overflow-y-auto"
           >
-            {/* Top Bar inside Mobile Fullscreen Overlay */}
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-5">
-              <Link href="/" onClick={() => setMobileMenuOpen(false)}>
-                <div className="relative h-10 w-48 shrink-0">
-                  <Image
-                    src="/logo.png"
-                    alt="Prabaswara Logo"
-                    fill
-                    sizes="192px"
-                    className="object-contain object-left scale-125 origin-left"
-                  />
-                </div>
-              </Link>
-
-              {/* Animated Morphing Close Button */}
-              <MorphingMenuButton
-                isOpen={mobileMenuOpen}
-                onClick={() => setMobileMenuOpen(false)}
-              />
-            </div>
-
             {/* Center Area: Full Screen Menu Navigation Links */}
-            <div className="py-8 space-y-6 max-w-md mx-auto w-full">
+            <div className="py-6 space-y-6 max-w-md mx-auto w-full my-auto">
               {/* BERANDA */}
               <Link
                 href="/"
@@ -409,13 +391,13 @@ export default function Navbar() {
             </div>
 
             {/* Bottom Action inside Mobile Fullscreen Overlay */}
-            <div className="pt-6 border-t border-neutral-800 space-y-4 max-w-md mx-auto w-full">
+            <div className="pt-4 border-t border-neutral-800/80 space-y-4 max-w-md mx-auto w-full shrink-0">
               <a
                 href={waLink}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center justify-center gap-3 w-full py-4 text-xs font-bold uppercase tracking-widest text-[#121212] bg-[#C9A961] hover:bg-[#B8964E] rounded-full text-center transition-all shadow-lg active:scale-95"
+                className="flex items-center justify-center gap-3 w-full py-3.5 text-xs font-bold uppercase tracking-widest text-[#121212] bg-[#C9A961] hover:bg-[#B8964E] rounded-full text-center transition-all shadow-lg active:scale-95"
               >
                 <span>HUBUNGI VIA WHATSAPP</span>
                 <ArrowUpRight className="w-4 h-4 text-[#121212]" />
