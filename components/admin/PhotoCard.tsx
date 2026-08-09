@@ -26,7 +26,7 @@ export default function PhotoCard({ photo, onEdit, onDelete }: PhotoCardProps) {
     <div className="bg-neutral-900 rounded-2xl border border-neutral-800 overflow-hidden flex flex-col justify-between hover:border-[#C9A961]/60 transition-all shadow-md group">
       <div>
         {/* Image Preview */}
-        <div className="relative aspect-[4/3] bg-neutral-950 overflow-hidden">
+        <div className="relative aspect-[3/4] bg-neutral-950 overflow-hidden">
           <Image
             src={photo.image_url}
             alt={photo.title}

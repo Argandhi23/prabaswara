@@ -10,7 +10,7 @@ import {
 } from "@/lib/supabase/data";
 import HeroSection from "@/components/sections/HeroSection";
 import BrandShowcase from "@/components/sections/BrandShowcase";
-import FeaturedWorkSection from "@/components/sections/FeaturedWorkSection";
+import PricingSection from "@/components/sections/PricingSection";
 import GalleryGrid from "@/components/sections/GalleryGrid";
 import TestimonialSection from "@/components/sections/TestimonialSection";
 import AboutSection from "@/components/sections/AboutSection";
@@ -60,10 +60,11 @@ export default async function HomePage() {
       {/* Sub-Brands Showcase (Light Gray #F5F5F5) */}
       <BrandShowcase brands={brands} whatsappNumber={settings.whatsappNumber} />
 
-      {/* Parallax Scroll Featured Work (Karya Unggulan Baru) */}
-      <FeaturedWorkSection photos={photos} whatsappNumber={settings.whatsappNumber} />
+      {/* Paket Harga / Pricing Section */}
+      <PricingSection whatsappNumber={settings.whatsappNumber} />
 
       {/* Featured Gallery (White #FFFFFF) */}
+
       <GalleryGrid
         photos={photos}
         title="Koleksi Karya Unggulan"

@@ -117,7 +117,7 @@ export default function BrandShowcase({
                 className="group relative flex flex-col justify-between bg-white border border-neutral-200 rounded-3xl overflow-hidden shadow-xs hover:border-[#C9A961]/70 hover:shadow-xl transition-all duration-300"
               >
                 {/* Image Aspect Box */}
-                <div className="brand-card-img-wrapper relative aspect-[16/10] w-full overflow-hidden bg-neutral-100">
+                <div className="brand-card-img-wrapper relative aspect-[16/9] w-full overflow-hidden bg-neutral-100">
                   <Image
                     src={brand.coverImage}
                     alt={brand.title}

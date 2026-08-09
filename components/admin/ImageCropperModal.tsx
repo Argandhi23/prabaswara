@@ -1,14 +1,17 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Crop, ZoomIn, RotateCw, Check, X, Frame, RefreshCw } from "lucide-react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { Crop, ZoomIn, RotateCw, Check, X, RefreshCw, Move, Lock } from "lucide-react";
 import { motion } from "framer-motion";
+
+export type CropRatioType = "portrait" | "landscape" | "square" | "free" | "banner";
 
 interface ImageCropperModalProps {
   imageSrc: string;
   onCropComplete: (croppedBlob: Blob) => void;
   onCancel: () => void;
-  initialAspectRatio?: "portrait" | "landscape" | "square" | "free";
+  initialAspectRatio?: CropRatioType;
+  lockAspectRatio?: boolean;
 }
 
 export default function ImageCropperModal({
@@ -16,49 +19,186 @@ export default function ImageCropperModal({
   onCropComplete,
   onCancel,
   initialAspectRatio = "portrait",
+  lockAspectRatio = true,
 }: ImageCropperModalProps) {
-  const [aspectRatio, setAspectRatio] = useState<"portrait" | "landscape" | "square" | "free">(
-    initialAspectRatio
-  );
+  const [aspectRatio, setAspectRatio] = useState<CropRatioType>(initialAspectRatio);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
   const [offsetX, setOffsetX] = useState(0);
   const [offsetY, setOffsetY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [initialOffset, setInitialOffset] = useState({ x: 0, y: 0 });
   const [isProcessing, setIsProcessing] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [naturalSize, setNaturalSize] = useState({ width: 1200, height: 900 });
 
   const imageRef = useRef<HTMLImageElement | null>(null);
-  const [imgLoaded, setImgLoaded] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    setImgLoaded(false);
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.src = imageSrc;
     img.onload = () => {
       imageRef.current = img;
+      setNaturalSize({
+        width: img.naturalWidth || 1200,
+        height: img.naturalHeight || 900,
+      });
       setImgLoaded(true);
+    };
+    img.onerror = () => {
+      const img2 = new Image();
+      img2.src = imageSrc;
+      img2.onload = () => {
+        imageRef.current = img2;
+        setNaturalSize({
+          width: img2.naturalWidth || 1200,
+          height: img2.naturalHeight || 900,
+        });
+        setImgLoaded(true);
+      };
+      img2.onerror = () => setImgLoaded(true);
     };
   }, [imageSrc]);
 
-  // Target dimensions based on aspect ratio
-  const getTargetRatio = () => {
-    switch (aspectRatio) {
-      case "portrait":
-        return 3 / 4;
-      case "landscape":
-        return 4 / 3;
-      case "square":
-        return 1 / 1;
-      default:
-        return 1;
+  // Dragging Handlers
+  const handleStartDrag = (clientX: number, clientY: number) => {
+    setIsDragging(true);
+    setDragStart({ x: clientX, y: clientY });
+    setInitialOffset({ x: offsetX, y: offsetY });
+  };
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    handleStartDrag(e.clientX, e.clientY);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (e.touches.length === 1) {
+      handleStartDrag(e.touches[0].clientX, e.touches[0].clientY);
     }
   };
 
+  const handleMove = useCallback(
+    (clientX: number, clientY: number) => {
+      if (!isDragging) return;
+      const dx = clientX - dragStart.x;
+      const dy = clientY - dragStart.y;
+      setOffsetX(initialOffset.x + dx);
+      setOffsetY(initialOffset.y + dy);
+    },
+    [isDragging, dragStart, initialOffset]
+  );
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (isDragging) {
+      e.preventDefault();
+      handleMove(e.clientX, e.clientY);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (isDragging && e.touches.length === 1) {
+      handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  };
+
+  const handleEndDrag = () => {
+    setIsDragging(false);
+  };
+
+  // Get preview box pixel dimensions (width & height in DOM)
+  const getBoxDimensions = () => {
+    if (aspectRatio === "banner") {
+      const boxW = 340;
+      const boxH = Math.round((340 * 9) / 16); // 191px height
+      return { boxW, boxH, ratioStr: "16/9", aspectVal: 16 / 9 };
+    }
+    if (aspectRatio === "portrait") {
+      const boxW = 210;
+      const boxH = 280;
+      return { boxW, boxH, ratioStr: "3/4", aspectVal: 3 / 4 };
+    }
+    if (aspectRatio === "landscape") {
+      const boxW = 320;
+      const boxH = 240;
+      return { boxW, boxH, ratioStr: "4/3", aspectVal: 4 / 3 };
+    }
+    if (aspectRatio === "square") {
+      const boxW = 240;
+      const boxH = 240;
+      return { boxW, boxH, ratioStr: "1/1", aspectVal: 1 };
+    }
+    const freeVal =
+      naturalSize.width > 0 && naturalSize.height > 0
+        ? naturalSize.width / naturalSize.height
+        : 1;
+    const boxW = naturalSize.width >= naturalSize.height ? 320 : Math.round(240 * freeVal);
+    const boxH = naturalSize.width >= naturalSize.height ? Math.round(320 / freeVal) : 240;
+    return {
+      boxW,
+      boxH,
+      ratioStr: `${naturalSize.width}/${naturalSize.height}`,
+      aspectVal: freeVal,
+    };
+  };
+
+  const { boxW, boxH, ratioStr, aspectVal } = getBoxDimensions();
+
+  // Compute Base Image Size inside Preview Box (accounting for rotation)
+  const isRotated90or270 = rotation % 180 !== 0;
+  const rotatedNaturalW = isRotated90or270 ? naturalSize.height : naturalSize.width;
+  const rotatedNaturalH = isRotated90or270 ? naturalSize.width : naturalSize.height;
+
+  const scaleX = boxW / Math.max(1, rotatedNaturalW);
+  const scaleY = boxH / Math.max(1, rotatedNaturalH);
+  const baseCoverScale = Math.max(scaleX, scaleY);
+
+  const baseImgW = Math.round(naturalSize.width * baseCoverScale);
+  const baseImgH = Math.round(naturalSize.height * baseCoverScale);
+
+  // Canvas Crop & Export Handler
   const handleApplyCrop = () => {
     if (!imageRef.current) return;
     setIsProcessing(true);
 
     const img = imageRef.current;
+    const naturalWidth = img.naturalWidth || naturalSize.width;
+    const naturalHeight = img.naturalHeight || naturalSize.height;
+
+    let outW = 1600;
+    let outH = 900;
+
+    if (aspectRatio === "banner") {
+      // 16:9 Standard Banner Ratio (1600x900)
+      outW = 1600;
+      outH = 900;
+    } else if (aspectRatio === "portrait") {
+      // 3:4 Standard Photo Card Ratio (1200x1600)
+      outW = 1200;
+      outH = 1600;
+    } else if (aspectRatio === "landscape") {
+      outW = 1600;
+      outH = 1200;
+    } else if (aspectRatio === "square") {
+      outW = 1400;
+      outH = 1400;
+    } else {
+      if (naturalWidth >= naturalHeight) {
+        outW = Math.min(1600, naturalWidth);
+        outH = Math.round(outW / aspectVal);
+      } else {
+        outH = Math.min(1600, naturalHeight);
+        outW = Math.round(outH * aspectVal);
+      }
+    }
+
     const canvas = document.createElement("canvas");
+    canvas.width = outW;
+    canvas.height = outH;
     const ctx = canvas.getContext("2d");
 
     if (!ctx) {
@@ -66,47 +206,23 @@ export default function ImageCropperModal({
       return;
     }
 
-    const targetRatio = getTargetRatio();
-    let cropWidth = img.naturalWidth;
-    let cropHeight = img.naturalHeight;
+    const screenToCanvas = outW / boxW;
 
-    if (aspectRatio !== "free") {
-      if (cropWidth / cropHeight > targetRatio) {
-        cropWidth = cropHeight * targetRatio;
-      } else {
-        cropHeight = cropWidth / targetRatio;
-      }
-    }
+    const canvasBaseScale = baseCoverScale * screenToCanvas;
+    const canvasTotalScale = canvasBaseScale * zoom;
 
-    // High definition output canvas (capped at 1600px for high clarity & reasonable file size)
-    const outputWidth = Math.min(1600, Math.round(cropWidth));
-    const outputHeight = Math.min(1600, Math.round(cropHeight));
-
-    canvas.width = outputWidth;
-    canvas.height = outputHeight;
+    const canvasOffsetX = offsetX * screenToCanvas;
+    const canvasOffsetY = offsetY * screenToCanvas;
 
     ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
 
-    // Move to center of canvas for rotation & zoom
-    ctx.translate(outputWidth / 2, outputHeight / 2);
+    ctx.translate(outW / 2 + canvasOffsetX, outH / 2 + canvasOffsetY);
     ctx.rotate((rotation * Math.PI) / 180);
-    ctx.scale(zoom, zoom);
+    ctx.scale(canvasTotalScale, canvasTotalScale);
 
-    // Apply offset translation
-    const sourceX = (img.naturalWidth - cropWidth) / 2 + offsetX * (img.naturalWidth / 100);
-    const sourceY = (img.naturalHeight - cropHeight) / 2 + offsetY * (img.naturalHeight / 100);
-
-    ctx.drawImage(
-      img,
-      sourceX,
-      sourceY,
-      cropWidth,
-      cropHeight,
-      -outputWidth / 2,
-      -outputHeight / 2,
-      outputWidth,
-      outputHeight
-    );
+    ctx.drawImage(img, -naturalWidth / 2, -naturalHeight / 2, naturalWidth, naturalHeight);
 
     ctx.restore();
 
@@ -118,7 +234,7 @@ export default function ImageCropperModal({
         }
       },
       "image/webp",
-      0.9
+      0.92
     );
   };
 
@@ -138,10 +254,14 @@ export default function ImageCropperModal({
             </div>
             <div>
               <h3 className="font-serif-heading text-base sm:text-lg font-bold text-white leading-tight">
-                Editor Potong Gambar (Crop)
+                {aspectRatio === "banner"
+                  ? "Crop Cover Banner Sub-Brand (16:9)"
+                  : "Crop Foto Karya Portofolio (3:4)"}
               </h3>
               <p className="text-[11px] text-neutral-400 font-light">
-                Atur rasio & potong foto agar sesuai dengan tampilan website Prabaswara.
+                {aspectRatio === "banner"
+                  ? "Rasio 16:9 terkunci pas 100% dengan kartu banner sub-brand. Geser posisi foto agar pas."
+                  : "Rasio 3:4 portrait terkunci pas 100% dengan kartu galeri. Geser posisi foto agar pas."}
               </p>
             </div>
           </div>
@@ -156,65 +276,18 @@ export default function ImageCropperModal({
 
         {/* SCROLLABLE BODY */}
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1 custom-scrollbar">
-          {/* Aspect Ratio Selector */}
-          <div className="space-y-2">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
-              <Frame className="w-3.5 h-3.5 text-[#C9A961]" />
-              <span>Pilih Rasio Foto (Aspect Ratio)</span>
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <button
-                type="button"
-                onClick={() => setAspectRatio("portrait")}
-                className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
-                  aspectRatio === "portrait"
-                    ? "bg-[#C9A961] text-neutral-950 font-bold shadow-md"
-                    : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                Portrait (3:4)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAspectRatio("landscape")}
-                className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
-                  aspectRatio === "landscape"
-                    ? "bg-[#C9A961] text-neutral-950 font-bold shadow-md"
-                    : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                Landscape (4:3)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAspectRatio("square")}
-                className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
-                  aspectRatio === "square"
-                    ? "bg-[#C9A961] text-neutral-950 font-bold shadow-md"
-                    : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                Square (1:1)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setAspectRatio("free")}
-                className={`py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center transition-all cursor-pointer ${
-                  aspectRatio === "free"
-                    ? "bg-[#C9A961] text-neutral-950 font-bold shadow-md"
-                    : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                Asli / Bebas
-              </button>
-            </div>
+          {/* Automatic Single Locked Ratio Badge */}
+          <div className="p-3.5 bg-[#C9A961]/12 border border-[#C9A961]/40 rounded-2xl text-center flex items-center justify-center gap-2.5 shadow-sm">
+            <Lock className="w-4 h-4 text-[#C9A961]" />
+            <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider">
+              {aspectRatio === "banner"
+                ? "Rasio Terkunci Banner Sub-Brand (16:9 Pas Kartu)"
+                : "Rasio Terkunci Karya Foto Galeri (3:4 Portrait Pas Kartu)"}
+            </span>
           </div>
 
-          {/* Canvas Preview Box */}
-          <div className="relative bg-neutral-950 rounded-2xl border border-neutral-800 overflow-hidden flex items-center justify-center p-3 min-h-[220px] max-h-[300px]">
+          {/* Interactive Drag & Preview Box */}
+          <div className="relative bg-neutral-950 rounded-2xl border border-neutral-800 overflow-hidden flex items-center justify-center p-4 min-h-[240px] max-h-[320px]">
             {!imgLoaded ? (
               <div className="flex flex-col items-center space-y-2 py-8">
                 <div className="w-8 h-8 border-2 border-[#C9A961] border-t-transparent rounded-full animate-spin" />
@@ -222,26 +295,52 @@ export default function ImageCropperModal({
               </div>
             ) : (
               <div
-                className="relative overflow-hidden transition-all duration-300 border-2 border-dashed border-[#C9A961] shadow-2xl flex items-center justify-center max-h-[260px] mx-auto"
+                ref={containerRef}
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleEndDrag}
+                onMouseLeave={handleEndDrag}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleEndDrag}
+                className={`relative overflow-hidden transition-all duration-300 border-2 border-dashed border-[#C9A961] shadow-2xl flex items-center justify-center mx-auto select-none ${
+                  isDragging ? "cursor-grabbing" : "cursor-grab"
+                }`}
                 style={{
-                  aspectRatio:
-                    aspectRatio === "portrait"
-                      ? "3/4"
-                      : aspectRatio === "landscape"
-                      ? "4/3"
-                      : aspectRatio === "square"
-                      ? "1/1"
-                      : "auto",
+                  width: `${boxW}px`,
+                  height: `${boxH}px`,
                 }}
               >
                 <img
                   src={imageSrc}
                   alt="Crop preview"
-                  className="object-cover transition-transform duration-100 max-h-[250px] w-full"
+                  draggable={false}
+                  className="absolute pointer-events-none max-w-none origin-center"
                   style={{
-                    transform: `scale(${zoom}) rotate(${rotation}deg) translate(${offsetX}px, ${offsetY}px)`,
+                    width: `${baseImgW}px`,
+                    height: `${baseImgH}px`,
+                    transform: `translate(${offsetX}px, ${offsetY}px) rotate(${rotation}deg) scale(${zoom})`,
                   }}
                 />
+
+                {/* Rule of Thirds Grid Overlay */}
+                <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 border border-white/20">
+                  <div className="border-r border-b border-white/20" />
+                  <div className="border-r border-b border-white/20" />
+                  <div className="border-b border-white/20" />
+                  <div className="border-r border-b border-white/20" />
+                  <div className="border-r border-b border-white/20" />
+                  <div className="border-b border-white/20" />
+                  <div className="border-r border-white/20" />
+                  <div className="border-r border-white/20" />
+                  <div />
+                </div>
+
+                {/* Drag Hint Badge */}
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 bg-black/75 backdrop-blur-md px-3 py-1 rounded-full border border-white/20 text-[10px] text-neutral-200 flex items-center gap-1.5 pointer-events-none shadow-md">
+                  <Move className="w-3 h-3 text-[#C9A961]" />
+                  <span>Klik & Geser Gambar</span>
+                </div>
               </div>
             )}
           </div>

@@ -128,13 +128,8 @@ export default function GalleryGrid({
                     exit={{ opacity: 0, scale: 0.94 }}
                     transition={{ duration: 0.4, ease: customEase }}
                     onClick={() => setActivePhoto(photo)}
-                    className={`group relative overflow-hidden rounded-2xl bg-neutral-100 border border-neutral-200/80 cursor-pointer transition-all duration-500 hover:border-[#C9A961]/80 hover:shadow-xl ${
-                      isPortrait
-                        ? "aspect-[3/4]"
-                        : isLandscape
-                        ? "aspect-[4/3]"
-                        : "aspect-square"
-                    }`}
+                    className="group relative overflow-hidden rounded-2xl bg-neutral-100 border border-neutral-200/80 cursor-pointer transition-all duration-500 hover:border-[#C9A961]/80 hover:shadow-xl aspect-[3/4]"
+
                   >
                     <Image
                       src={photo.imageUrl}

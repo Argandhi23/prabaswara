@@ -24,6 +24,7 @@ import AdminGuideBanner from "@/components/admin/AdminGuideBanner";
 import PhotoCard from "@/components/admin/PhotoCard";
 import BrandCard from "@/components/admin/BrandCard";
 import AdminToast from "@/components/admin/AdminToast";
+import ImageCropperModal, { CropRatioType } from "@/components/admin/ImageCropperModal";
 
 export default function AdminDashboardPage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
@@ -70,7 +71,8 @@ export default function AdminDashboardPage() {
 
   // Cropper Controls State
   const [cropperSrc, setCropperSrc] = useState<string | null>(null);
-  const [cropRatio, setCropRatio] = useState<"portrait" | "landscape" | "square" | "free">("portrait");
+  const [cropRatio, setCropRatio] = useState<CropRatioType>("portrait");
+
   const [cropZoom, setCropZoom] = useState(1);
   const [cropRotation, setCropRotation] = useState(0);
   const [cropOffsetX, setCropOffsetX] = useState(0);
@@ -157,74 +159,18 @@ export default function AdminDashboardPage() {
         setCropRotation(0);
         setCropOffsetX(0);
         setCropOffsetY(0);
-        setCropRatio(target === "brand" ? "landscape" : "portrait");
+        setCropRatio(target === "brand" ? "banner" : "portrait");
         setModalMode("crop");
       }
     };
     reader.readAsDataURL(file);
   };
 
-  // Step 2: Crop & Upload
-  const handleApplyCropAndUpload = async () => {
-    if (!cropperImageRef.current) return;
+  // Step 2: Receive Cropped Blob & Upload
+  const handleCropComplete = async (blob: Blob) => {
     setIsCropping(true);
 
     try {
-      const img = cropperImageRef.current;
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-
-      if (!ctx) throw new Error("Gagal membuat canvas cropper.");
-
-      const targetRatio =
-        cropRatio === "portrait" ? 3 / 4 : cropRatio === "landscape" ? 4 / 3 : 1;
-
-      let cropWidth = img.naturalWidth;
-      let cropHeight = img.naturalHeight;
-
-      if (cropRatio !== "free") {
-        if (cropWidth / cropHeight > targetRatio) {
-          cropWidth = cropHeight * targetRatio;
-        } else {
-          cropHeight = cropWidth / targetRatio;
-        }
-      }
-
-      const outputWidth = Math.min(1600, Math.round(cropWidth));
-      const outputHeight = Math.min(1600, Math.round(cropHeight));
-
-      canvas.width = outputWidth;
-      canvas.height = outputHeight;
-
-      ctx.save();
-      ctx.translate(outputWidth / 2, outputHeight / 2);
-      ctx.rotate((cropRotation * Math.PI) / 180);
-      ctx.scale(cropZoom, cropZoom);
-
-      const sourceX = (img.naturalWidth - cropWidth) / 2 + cropOffsetX * (img.naturalWidth / 100);
-      const sourceY = (img.naturalHeight - cropHeight) / 2 + cropOffsetY * (img.naturalHeight / 100);
-
-      ctx.drawImage(
-        img,
-        sourceX,
-        sourceY,
-        cropWidth,
-        cropHeight,
-        -outputWidth / 2,
-        -outputHeight / 2,
-        outputWidth,
-        outputHeight
-      );
-
-      ctx.restore();
-
-      const blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob((b) => resolve(b), "image/webp", 0.9)
-      );
-
-      if (!blob) throw new Error("Gagal memproses blob WebP.");
-
-      // Upload to Supabase Storage API
       const formData = new FormData();
       formData.append("file", blob, `cropped-${Date.now()}.webp`);
 
@@ -260,8 +206,12 @@ export default function AdminDashboardPage() {
         }));
       }
 
-      showToastMsg("Gambar baru berhasil di-crop & diunggah ke Supabase!", "success");
+      showToastMsg("Gambar baru berhasil di-crop & diunggah!", "success");
+      setCropperSrc(null);
       setModalMode("form");
+      if (cropperTarget === "settingCamera" || cropperTarget === "settingAbout") {
+        setShowPhotoModal(false);
+      }
     } catch (err: any) {
       showToastMsg(err.message || "Gagal memproses crop gambar", "error");
     } finally {
@@ -813,171 +763,26 @@ export default function AdminDashboardPage() {
               >
                 <X className="w-5 h-5" />
               </button>
+              
+              {/* MODE 1: CROPPER MODAL VIEW */}
+              {modalMode === "crop" && cropperSrc && (
+                <ImageCropperModal
+                  imageSrc={cropperSrc}
+                  initialAspectRatio={cropRatio}
+                  lockAspectRatio={cropperTarget === "brand"}
+                  onCropComplete={handleCropComplete}
+                  onCancel={() => {
+                    setCropperSrc(null);
+                    if (cropperTarget === "settingCamera" || cropperTarget === "settingAbout") {
+                      setShowPhotoModal(false);
+                    } else {
+                      setModalMode("form");
+                    }
+                  }}
+                />
+              )}
+
             </div>
-
-            {/* MODE 1: CROPPER IN-MODAL VIEW */}
-            {modalMode === "crop" && cropperSrc && (
-              <div className="flex-1 flex flex-col overflow-hidden">
-                <div className="p-5 overflow-y-auto space-y-4 flex-1">
-                  {/* Aspect Ratio Selector */}
-                  <div className="space-y-2">
-                    <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
-                      <Frame className="w-3.5 h-3.5 text-[#C9A961]" />
-                      <span>Pilih Rasio Foto (Aspect Ratio)</span>
-                    </label>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setCropRatio("portrait")}
-                        className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                          cropRatio === "portrait"
-                            ? "bg-[#C9A961] text-neutral-950 font-bold shadow-md"
-                            : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
-                        }`}
-                      >
-                        Portrait (3:4)
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setCropRatio("landscape")}
-                        className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                          cropRatio === "landscape"
-                            ? "bg-[#C9A961] text-neutral-950 font-bold shadow-md"
-                            : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
-                        }`}
-                      >
-                        Landscape (4:3)
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setCropRatio("square")}
-                        className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                          cropRatio === "square"
-                            ? "bg-[#C9A961] text-neutral-950 font-bold shadow-md"
-                            : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
-                        }`}
-                      >
-                        Square (1:1)
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setCropRatio("free")}
-                        className={`py-2 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                          cropRatio === "free"
-                            ? "bg-[#C9A961] text-neutral-950 font-bold shadow-md"
-                            : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
-                        }`}
-                      >
-                        Asli / Bebas
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Crop Canvas Preview */}
-                  <div className="relative bg-neutral-950 rounded-2xl border border-neutral-800 overflow-hidden flex items-center justify-center p-3 min-h-[220px] max-h-[300px]">
-                    <div
-                      className="relative overflow-hidden transition-all duration-300 border-2 border-dashed border-[#C9A961] shadow-2xl flex items-center justify-center max-h-[260px] mx-auto"
-                      style={{
-                        aspectRatio:
-                          cropRatio === "portrait"
-                            ? "3/4"
-                            : cropRatio === "landscape"
-                            ? "4/3"
-                            : cropRatio === "square"
-                            ? "1/1"
-                            : "auto",
-                      }}
-                    >
-                      <img
-                        ref={cropperImageRef}
-                        src={cropperSrc}
-                        alt="Crop preview"
-                        className="object-cover transition-transform duration-100 max-h-[250px] w-full"
-                        style={{
-                          transform: `scale(${cropZoom}) rotate(${cropRotation}deg) translate(${cropOffsetX}px, ${cropOffsetY}px)`,
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Sliders & Rotate */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-neutral-950 p-3.5 rounded-xl border border-neutral-800">
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-xs text-neutral-400">
-                        <span className="flex items-center gap-1">
-                          <ZoomIn className="w-3.5 h-3.5 text-[#C9A961]" /> Perbesar (Zoom):
-                        </span>
-                        <span className="font-mono text-white font-semibold">{cropZoom.toFixed(1)}x</span>
-                      </div>
-                      <input
-                        type="range"
-                        min="1"
-                        max="3"
-                        step="0.1"
-                        value={cropZoom}
-                        onChange={(e) => setCropZoom(parseFloat(e.target.value))}
-                        className="w-full accent-[#C9A961] cursor-pointer"
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between gap-2 pt-1 sm:pt-0">
-                      <button
-                        type="button"
-                        onClick={() => setCropRotation((prev) => (prev + 90) % 360)}
-                        className="px-3.5 py-2 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-neutral-300 hover:text-white flex items-center gap-1.5 transition-all cursor-pointer"
-                      >
-                        <RotateCw className="w-3.5 h-3.5 text-[#C9A961]" />
-                        <span>Putar 90°</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setCropZoom(1);
-                          setCropRotation(0);
-                          setCropOffsetX(0);
-                          setCropOffsetY(0);
-                        }}
-                        className="px-3.5 py-2 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-neutral-400 hover:text-white flex items-center gap-1 transition-all cursor-pointer"
-                      >
-                        <RefreshCw className="w-3.5 h-3.5" />
-                        <span>Reset</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Crop Actions Footer */}
-                <div className="p-4 border-t border-neutral-800 shrink-0 bg-neutral-950/90 flex items-center justify-end gap-3 z-10">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (cropperTarget === "settingCamera" || cropperTarget === "settingAbout") {
-                        setShowPhotoModal(false);
-                      } else {
-                        setModalMode("form");
-                      }
-                    }}
-                    className="px-5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold uppercase tracking-wider cursor-pointer"
-                  >
-                    Batal
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleApplyCropAndUpload}
-                    disabled={isCropping}
-                    className="px-6 py-2.5 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider shadow-lg active:scale-95 cursor-pointer flex items-center gap-2 disabled:opacity-50"
-                  >
-                    <Check className="w-4 h-4" />
-                    <span>{isCropping ? "Memproses Crop..." : "Terapkan Crop & Upload"}</span>
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* MODE 2A: BRAND COVER EDIT FORM */}
             {modalMode === "form" && showBrandModal && (
