@@ -223,7 +223,24 @@ export async function PUT(req: NextRequest) {
           }
         }
 
+        if (!data || data.length === 0) {
+          const { data: upsertData } = await supabase
+            .from("packages")
+            .upsert([
+              {
+                id,
+                ...dbUpdatePayload,
+              },
+            ])
+            .select();
+
+          if (upsertData && upsertData.length > 0) {
+            data = upsertData;
+          }
+        }
+
         if (data && data.length > 0) {
+          savePersistedPackage(data[0]);
           revalidateAllPages();
           return NextResponse.json({ success: true, package: data[0] });
         }

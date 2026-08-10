@@ -75,7 +75,13 @@ export function savePersistedPackage(pkgData: any): PackageData {
     order: Number(pkgData.display_order !== undefined ? pkgData.display_order : pkgData.order) || 0,
   };
 
-  const index = currentPackages.findIndex((p) => p._id === id);
+  let index = currentPackages.findIndex((p) => p._id === id || (p as any).id === id);
+  if (index < 0 && pkgData.name && brandSlug) {
+    index = currentPackages.findIndex(
+      (p) => p.name === pkgData.name.trim() && p.brandSlug === brandSlug
+    );
+  }
+
   if (index >= 0) {
     currentPackages[index] = fullPkg;
   } else {
@@ -91,7 +97,7 @@ export function savePersistedPackage(pkgData: any): PackageData {
  */
 export function deletePersistedPackage(id: string) {
   const currentPackages = getPersistedPackages();
-  const updated = currentPackages.filter((p) => p._id !== id);
+  const updated = currentPackages.filter((p) => p._id !== id && (p as any).id !== id);
   saveAllPackagesToDisk(updated);
 }
 

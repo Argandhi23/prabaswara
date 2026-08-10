@@ -332,7 +332,11 @@ export default function AdminDashboardPage() {
 
       if (editingPackage) {
         setPackages((prev) =>
-          prev.map((p) => (p.id === savedPkg.id ? { ...p, ...savedPkg } : p))
+          prev.map((p) =>
+            p.id === savedPkg.id || (editingPackage && p.id === editingPackage.id)
+              ? { ...p, ...savedPkg }
+              : p
+          )
         );
       } else {
         setPackages((prev) => [...prev, savedPkg]);

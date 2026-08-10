@@ -231,15 +231,10 @@ export async function getTestimonials(brandSlug?: string): Promise<TestimonialDa
 }
 
 /**
- * Fetch pricing packages with optional brand filter (persisted store primary)
+ * Fetch pricing packages with optional brand filter (Supabase primary, disk fallback)
  */
 export async function getPackages(brandSlug?: string): Promise<PackageData[]> {
   const localPackages = getPersistedPackages();
-
-  if (localPackages && localPackages.length > 0) {
-    if (!brandSlug) return localPackages;
-    return localPackages.filter((p) => p.brandSlug === brandSlug);
-  }
 
   if (!isSupabaseConfigured) {
     if (!brandSlug) return localPackages;
@@ -275,7 +270,7 @@ export async function getPackages(brandSlug?: string): Promise<PackageData[]> {
       period: p.period || "",
       description: p.description || "",
       features: Array.isArray(p.features) ? p.features : [],
-      isPopular: p.is_popular || false,
+      isPopular: Boolean(p.is_popular),
       popularLabel: p.popular_label || "PALING POPULER",
       waMessage: p.wa_message || "",
       order: p.display_order || 0,
