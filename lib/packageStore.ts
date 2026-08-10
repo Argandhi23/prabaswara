@@ -60,8 +60,9 @@ export function savePersistedPackage(pkgData: any): PackageData {
   const id = pkgData.id || pkgData._id || `pkg-${Date.now()}`;
   const brandSlug = pkgData.brand_slug || pkgData.brandSlug || "swara-studio";
 
-  const fullPkg: PackageData = {
+  const fullPkg: PackageData & { id?: string } = {
     _id: id,
+    id: id,
     brandSlug,
     brandTag: brandTagMap[brandSlug] || brandSlug,
     name: pkgData.name || "Nama Paket",

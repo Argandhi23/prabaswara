@@ -21,13 +21,18 @@ function revalidateAllPages() {
   }
 }
 
+function isValidUUID(str?: string): boolean {
+  if (!str) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+}
+
 export async function GET() {
   try {
     const diskPackages = getPersistedPackages();
 
     if (!isSupabaseConfigured) {
       const formattedMock = diskPackages.map((p) => ({
-        id: p._id,
+        id: p._id || (p as any).id,
         brand_slug: p.brandSlug,
         name: p.name,
         price: p.price,
@@ -49,7 +54,7 @@ export async function GET() {
 
     if (error || !data || data.length === 0) {
       const formattedMock = diskPackages.map((p) => ({
-        id: p._id,
+        id: p._id || (p as any).id,
         brand_slug: p.brandSlug,
         name: p.name,
         price: p.price,
@@ -63,6 +68,9 @@ export async function GET() {
       }));
       return NextResponse.json({ packages: formattedMock });
     }
+
+    // Keep disk store synced with Supabase items
+    data.forEach((item) => savePersistedPackage(item));
 
     return NextResponse.json({ packages: data });
   } catch (error: any) {
@@ -110,30 +118,30 @@ export async function POST(req: NextRequest) {
       display_order: Number(display_order) || 0,
     };
 
-    // Always persist to disk so public pages update immediately
     savePersistedPackage(newPkg);
 
     if (isSupabaseConfigured) {
       try {
+        const insertPayload: any = {
+          brand_slug: newPkg.brand_slug,
+          name: newPkg.name,
+          price: newPkg.price,
+          period: newPkg.period,
+          description: newPkg.description,
+          features: newPkg.features,
+          is_popular: newPkg.is_popular,
+          popular_label: newPkg.popular_label,
+          wa_message: newPkg.wa_message,
+          display_order: newPkg.display_order,
+        };
+
         const { data, error } = await supabase
           .from("packages")
-          .insert([
-            {
-              brand_slug: newPkg.brand_slug,
-              name: newPkg.name,
-              price: newPkg.price,
-              period: newPkg.period,
-              description: newPkg.description,
-              features: newPkg.features,
-              is_popular: newPkg.is_popular,
-              popular_label: newPkg.popular_label,
-              wa_message: newPkg.wa_message,
-              display_order: newPkg.display_order,
-            },
-          ])
+          .insert([insertPayload])
           .select();
 
         if (!error && data && data.length > 0) {
+          savePersistedPackage(data[0]);
           revalidateAllPages();
           return NextResponse.json({ success: true, package: data[0] });
         }
@@ -187,55 +195,64 @@ export async function PUT(req: NextRequest) {
       display_order: Number(display_order) || 0,
     };
 
-    // Always persist to disk so public pages update immediately
     savePersistedPackage(updateFields);
 
     if (isSupabaseConfigured) {
       try {
-        const dbUpdatePayload: any = {};
-        if (brand_slug !== undefined) dbUpdatePayload.brand_slug = brand_slug.trim();
-        if (name !== undefined) dbUpdatePayload.name = name.trim();
-        if (price !== undefined) dbUpdatePayload.price = price.trim();
-        if (period !== undefined) dbUpdatePayload.period = period.trim();
-        if (description !== undefined) dbUpdatePayload.description = description.trim();
-        if (features !== undefined) dbUpdatePayload.features = Array.isArray(features) ? features : [];
-        if (is_popular !== undefined) dbUpdatePayload.is_popular = Boolean(is_popular);
-        if (popular_label !== undefined) dbUpdatePayload.popular_label = popular_label.trim();
-        if (wa_message !== undefined) dbUpdatePayload.wa_message = wa_message.trim();
-        if (display_order !== undefined) dbUpdatePayload.display_order = Number(display_order);
+        const dbUpdatePayload: any = {
+          brand_slug: updateFields.brand_slug,
+          name: updateFields.name,
+          price: updateFields.price,
+          period: updateFields.period,
+          description: updateFields.description,
+          features: updateFields.features,
+          is_popular: updateFields.is_popular,
+          popular_label: updateFields.popular_label,
+          wa_message: updateFields.wa_message,
+          display_order: updateFields.display_order,
+        };
 
-        let { data, error } = await supabase
-          .from("packages")
-          .update(dbUpdatePayload)
-          .eq("id", id)
-          .select();
+        let data: any[] | null = null;
 
-        if (error || !data || data.length === 0) {
-          const { data: nameData } = await supabase
+        // Step 1: If id is valid UUID, update by id
+        if (isValidUUID(id)) {
+          const res = await supabase
             .from("packages")
             .update(dbUpdatePayload)
-            .eq("name", name ? name.trim() : "")
-            .eq("brand_slug", brand_slug ? brand_slug.trim() : "")
+            .eq("id", id)
             .select();
 
-          if (nameData && nameData.length > 0) {
-            data = nameData;
+          if (res.data && res.data.length > 0) {
+            data = res.data;
           }
         }
 
+        // Step 2: Fallback update by name & brand_slug if non-UUID or eq(id) returned 0 rows
         if (!data || data.length === 0) {
-          const { data: upsertData } = await supabase
+          const resName = await supabase
             .from("packages")
-            .upsert([
-              {
-                id,
-                ...dbUpdatePayload,
-              },
-            ])
+            .update(dbUpdatePayload)
+            .eq("name", updateFields.name)
+            .eq("brand_slug", updateFields.brand_slug)
             .select();
 
-          if (upsertData && upsertData.length > 0) {
-            data = upsertData;
+          if (resName.data && resName.data.length > 0) {
+            data = resName.data;
+          }
+        }
+
+        // Step 3: Fallback insert if not found in Supabase
+        if (!data || data.length === 0) {
+          const insertPayload: any = { ...dbUpdatePayload };
+          if (isValidUUID(id)) insertPayload.id = id;
+
+          const resInsert = await supabase
+            .from("packages")
+            .insert([insertPayload])
+            .select();
+
+          if (resInsert.data && resInsert.data.length > 0) {
+            data = resInsert.data;
           }
         }
 
@@ -268,12 +285,15 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "ID Paket diperlukan." }, { status: 400 });
     }
 
-    // Always delete from disk storage
     deletePersistedPackage(id);
 
     if (isSupabaseConfigured) {
       try {
-        await supabase.from("packages").delete().eq("id", id);
+        if (isValidUUID(id)) {
+          await supabase.from("packages").delete().eq("id", id);
+        } else {
+          await supabase.from("packages").delete().eq("id", id);
+        }
       } catch (dbErr) {
         console.warn("Supabase delete warning:", dbErr);
       }
