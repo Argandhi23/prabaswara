@@ -3,6 +3,8 @@ import { verifyAdminSession } from "@/lib/adminAuth";
 import { supabase } from "@/lib/supabase/client";
 import { revalidatePath } from "next/cache";
 
+import { formatWhatsAppNumber } from "@/lib/whatsapp";
+
 export async function GET() {
   try {
     const { data, error } = await supabase
@@ -43,11 +45,13 @@ export async function POST(req: NextRequest) {
 
     const { data: existing } = await supabase.from("site_settings").select("id").limit(1).maybeSingle();
 
+    const formattedWaNumber = formatWhatsAppNumber(whatsappNumber || "6287701906556");
+
     const payload: any = {
       company_name: companyName || "Prabaswara",
       tagline: tagline || "Photography & Creative Visual Studio",
       about_text: aboutText || "",
-      whatsapp_number: whatsappNumber || "6281234567890",
+      whatsapp_number: formattedWaNumber,
       default_whatsapp_message: defaultWhatsappMessage || "",
       address: address || "",
       email: email || "",
@@ -73,10 +77,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: result.error.message }, { status: 500 });
     }
 
-    revalidatePath("/");
-    revalidatePath("/tentang");
+    try {
+      revalidatePath("/", "layout");
+      revalidatePath("/tentang");
+      revalidatePath("/testimoni");
+      revalidatePath("/swara-gallery");
+      revalidatePath("/swara-studio");
+      revalidatePath("/swara-moment");
+      revalidatePath("/swara-wedding");
+      revalidatePath("/[brandSlug]", "page");
+    } catch (e) {
+      console.warn("Revalidation warning:", e);
+    }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, settings: payload });
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

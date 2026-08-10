@@ -66,7 +66,7 @@ export const MOCK_SITE_SETTINGS: SiteSettingsData = {
   tagline: "Photography & Creative Visual Studio",
   aboutText:
     "Prabaswara adalah kolektif fotografi profesional yang didirikan dengan semangat mengabadikan keindahan visual, cerita emosional, dan momen berharga. Kami menaungi empat bidang keahlian spesifik: Swara Gallery untuk eksplorasi seni fotografi visual, Swara Studio untuk potret personal & komersial berstandar tinggi, Swara Moment untuk dokumentasi acara & selebrasi, serta Swara Wedding untuk merayakan momen terbaik dalam hidup pasangan suami istri.",
-  whatsappNumber: "6281234567890",
+  whatsappNumber: "6287701906556",
   defaultWhatsappMessage:
     "Halo Prabaswara, saya ingin berkonsultasi mengenai layanan fotografi Anda.",
   address: "Jl. Senopati No. 88, Kebayoran Baru, Jakarta Selatan",

@@ -67,11 +67,15 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+import { getSiteSettings } from "@/lib/supabase/data";
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const settings = await getSiteSettings();
+
   return (
     <html
       lang="id"
@@ -82,7 +86,7 @@ export default function RootLayout({
         <Navbar />
         <main className="flex-1">{children}</main>
         <Footer />
-        <FloatingWhatsApp />
+        <FloatingWhatsApp number={settings.whatsappNumber} />
       </body>
     </html>
   );

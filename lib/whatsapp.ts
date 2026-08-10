@@ -1,4 +1,4 @@
-export const DEFAULT_WHATSAPP_NUMBER = "6281234567890"; // Fallback default
+export const DEFAULT_WHATSAPP_NUMBER = "6287701906556"; // Fallback default
 
 export interface WhatsAppLinkOptions {
   number?: string;

@@ -116,17 +116,11 @@ export default function AdminDashboardPage() {
   // Auth check & data fetching
   useEffect(() => {
     async function checkAuth() {
-      try {
-        const res = await fetch("/api/admin/auth");
-        const data = await res.json();
-        if (!data.authenticated) {
-          router.push("/admin/login");
-        } else {
-          setAuthenticated(true);
-          fetchData();
-        }
-      } catch {
+      const res = await fetch("/api/admin/auth");
+      if (!res.ok) {
         router.push("/admin/login");
+      } else {
+        fetchData();
       }
     }
     checkAuth();
@@ -135,18 +129,21 @@ export default function AdminDashboardPage() {
   async function fetchData() {
     setLoading(true);
     try {
-      const [resPhotos, resBrands, resPackages] = await Promise.all([
+      const [resPhotos, resBrands, resPackages, resSettings] = await Promise.all([
         fetch("/api/admin/photos"),
         fetch("/api/admin/brands"),
         fetch("/api/admin/packages"),
+        fetch("/api/admin/settings"),
       ]);
       const dataPhotos = await resPhotos.json();
       const dataBrands = await resBrands.json();
       const dataPackages = await resPackages.json();
+      const dataSettings = await resSettings.json();
 
       if (dataPhotos.photos) setPhotos(dataPhotos.photos);
       if (dataBrands.brands) setBrands(dataBrands.brands);
       if (dataPackages.packages) setPackages(dataPackages.packages);
+      if (dataSettings.settings) setSettings(dataSettings.settings);
     } catch (err) {
       console.error("Error fetching data:", err);
     } finally {
@@ -399,6 +396,7 @@ export default function AdminDashboardPage() {
       if (!res.ok) throw new Error(data.error || "Gagal menyimpan pengaturan");
 
       showToastMsg("Pengaturan website & gambar About berhasil disimpan!", "success");
+      fetchData();
       router.refresh();
     } catch (err: any) {
       showToastMsg(err.message || "Terjadi kesalahan", "error");
