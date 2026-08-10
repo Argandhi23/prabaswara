@@ -204,13 +204,26 @@ export async function PUT(req: NextRequest) {
         if (wa_message !== undefined) dbUpdatePayload.wa_message = wa_message.trim();
         if (display_order !== undefined) dbUpdatePayload.display_order = Number(display_order);
 
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from("packages")
           .update(dbUpdatePayload)
           .eq("id", id)
           .select();
 
-        if (!error && data && data.length > 0) {
+        if (error || !data || data.length === 0) {
+          const { data: nameData } = await supabase
+            .from("packages")
+            .update(dbUpdatePayload)
+            .eq("name", name ? name.trim() : "")
+            .eq("brand_slug", brand_slug ? brand_slug.trim() : "")
+            .select();
+
+          if (nameData && nameData.length > 0) {
+            data = nameData;
+          }
+        }
+
+        if (data && data.length > 0) {
           revalidateAllPages();
           return NextResponse.json({ success: true, package: data[0] });
         }

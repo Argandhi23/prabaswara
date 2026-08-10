@@ -2,7 +2,6 @@ import { supabase, isSupabaseConfigured } from "./client";
 import {
   BrandData,
   MOCK_BRANDS,
-  MOCK_PACKAGES,
   MOCK_PHOTOS,
   MOCK_SITE_SETTINGS,
   MOCK_TESTIMONIALS,
@@ -11,6 +10,7 @@ import {
   SiteSettingsData,
   TestimonialData,
 } from "@/lib/mockData";
+import { getPersistedPackages } from "@/lib/packageStore";
 
 /**
  * Fetch Site Settings with mock fallback
@@ -230,13 +230,16 @@ export async function getTestimonials(brandSlug?: string): Promise<TestimonialDa
   }
 }
 
-import { getPersistedPackages } from "@/lib/packageStore";
-
 /**
- * Fetch pricing packages with optional brand filter
+ * Fetch pricing packages with optional brand filter (persisted store primary)
  */
 export async function getPackages(brandSlug?: string): Promise<PackageData[]> {
   const localPackages = getPersistedPackages();
+
+  if (localPackages && localPackages.length > 0) {
+    if (!brandSlug) return localPackages;
+    return localPackages.filter((p) => p.brandSlug === brandSlug);
+  }
 
   if (!isSupabaseConfigured) {
     if (!brandSlug) return localPackages;
@@ -283,4 +286,3 @@ export async function getPackages(brandSlug?: string): Promise<PackageData[]> {
     return localPackages.filter((p) => p.brandSlug === brandSlug);
   }
 }
-
