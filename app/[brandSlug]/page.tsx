@@ -7,11 +7,13 @@ import Image from "next/image";
 import {
   getBrandBySlug,
   getBrands,
+  getPackages,
   getPhotosByBrand,
   getSiteSettings,
   getTestimonials,
 } from "@/lib/supabase/data";
 import GalleryGrid from "@/components/sections/GalleryGrid";
+import PricingSection from "@/components/sections/PricingSection";
 import TestimonialSection from "@/components/sections/TestimonialSection";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
 import { ArrowUpRight, MessageCircle } from "lucide-react";
@@ -56,11 +58,12 @@ export async function generateMetadata({
 
 export default async function BrandDetailPage({ params }: BrandPageProps) {
   const { brandSlug } = await params;
-  const [brand, photos, testimonials, settings] = await Promise.all([
+  const [brand, photos, testimonials, settings, packages] = await Promise.all([
     getBrandBySlug(brandSlug),
     getPhotosByBrand(brandSlug),
     getTestimonials(brandSlug),
     getSiteSettings(),
+    getPackages(brandSlug),
   ]);
 
   if (!brand) {
@@ -132,6 +135,14 @@ export default async function BrandDetailPage({ params }: BrandPageProps) {
         title={`Galeri ${brand.title}`}
         subtitle={`Koleksi hasil karya fotografi dan portofolio ${brand.title}`}
         showFilter={false}
+        whatsappNumber={settings.whatsappNumber}
+      />
+
+      {/* Brand Pricing Packages Section */}
+      <PricingSection
+        packages={packages}
+        currentBrandSlug={brand.slug}
+        brandTitle={brand.title}
         whatsappNumber={settings.whatsappNumber}
       />
 

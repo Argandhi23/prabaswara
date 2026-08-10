@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminSession } from "@/lib/adminAuth";
 import { supabase } from "@/lib/supabase/client";
-import { MOCK_BRANDS, MOCK_PHOTOS, MOCK_TESTIMONIALS, MOCK_SITE_SETTINGS } from "@/lib/mockData";
+import { MOCK_BRANDS, MOCK_PHOTOS, MOCK_TESTIMONIALS, MOCK_SITE_SETTINGS, MOCK_PACKAGES } from "@/lib/mockData";
 
 export async function POST(req: NextRequest) {
   try {
@@ -72,7 +72,25 @@ export async function POST(req: NextRequest) {
       await supabase.from("testimonials").insert(testimonialsPayload);
     }
 
-    return NextResponse.json({ success: true, message: "Data sampel awal berhasil diimpor ke Supabase!" });
+    // 5. Seed Packages if empty
+    const { data: existingPackages } = await supabase.from("packages").select("id").limit(1);
+    if (!existingPackages || existingPackages.length === 0) {
+      const packagesPayload = MOCK_PACKAGES.map((p) => ({
+        brand_slug: p.brandSlug,
+        name: p.name,
+        price: p.price,
+        period: p.period,
+        description: p.description,
+        features: p.features,
+        is_popular: p.isPopular,
+        popular_label: p.popularLabel,
+        wa_message: p.waMessage,
+        display_order: p.order,
+      }));
+      await supabase.from("packages").insert(packagesPayload);
+    }
+
+    return NextResponse.json({ success: true, message: "Data sampel awal (termasuk paket harga) berhasil diimpor ke Supabase!" });
   } catch (error: any) {
     return NextResponse.json({ error: error.message || "Gagal impor data ke Supabase" }, { status: 500 });
   }

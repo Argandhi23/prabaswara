@@ -9,16 +9,16 @@ import {
   Grid,
   X,
   Crop,
-  ZoomIn,
-  RotateCw,
-  RefreshCw,
-  Check,
-  Frame,
   Layers,
   CheckCircle,
+  Tag,
+  Trash2,
+  Edit3,
+  Check,
+  Sparkles,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { Photo, Brand, SiteSettings, AdminToast as ToastType } from "@/types";
+import { Photo, Brand, SiteSettings, PackageItem, AdminToast as ToastType } from "@/types";
 import AdminHeader from "@/components/admin/AdminHeader";
 import AdminGuideBanner from "@/components/admin/AdminGuideBanner";
 import PhotoCard from "@/components/admin/PhotoCard";
@@ -28,12 +28,14 @@ import ImageCropperModal, { CropRatioType } from "@/components/admin/ImageCroppe
 
 export default function AdminDashboardPage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState<"photos" | "brands" | "settings">("photos");
+  const [activeTab, setActiveTab] = useState<"photos" | "brands" | "packages" | "settings">("photos");
   const [locationFilter, setLocationFilter] = useState<string>("all");
+  const [packageCategoryFilter, setPackageCategoryFilter] = useState<string>("all");
 
   // Data States
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [packages, setPackages] = useState<PackageItem[]>([]);
   const [settings, setSettings] = useState<SiteSettings>({
     company_name: "Prabaswara",
     tagline: "Photography & Creative Visual Studio",
@@ -65,6 +67,24 @@ export default function AdminDashboardPage() {
     coverImage: "",
   });
 
+  // Package Modal State
+  const [showPackageModal, setShowPackageModal] = useState(false);
+  const [editingPackage, setEditingPackage] = useState<PackageItem | null>(null);
+  const [newFeatureText, setNewFeatureText] = useState("");
+  const [packageForm, setPackageForm] = useState({
+    id: "",
+    brand_slug: "swara-studio",
+    name: "",
+    price: "",
+    period: "",
+    description: "",
+    features: [] as string[],
+    is_popular: false,
+    popular_label: "PALING POPULER",
+    wa_message: "",
+    display_order: 0,
+  });
+
   // Cropper Target ("photo" | "brand" | "settingCamera" | "settingAbout")
   const [cropperTarget, setCropperTarget] = useState<"photo" | "brand" | "settingCamera" | "settingAbout">("photo");
   const [modalMode, setModalMode] = useState<"form" | "crop">("form");
@@ -72,13 +92,6 @@ export default function AdminDashboardPage() {
   // Cropper Controls State
   const [cropperSrc, setCropperSrc] = useState<string | null>(null);
   const [cropRatio, setCropRatio] = useState<CropRatioType>("portrait");
-
-  const [cropZoom, setCropZoom] = useState(1);
-  const [cropRotation, setCropRotation] = useState(0);
-  const [cropOffsetX, setCropOffsetX] = useState(0);
-  const [cropOffsetY, setCropOffsetY] = useState(0);
-  const [isCropping, setIsCropping] = useState(false);
-  const cropperImageRef = useRef<HTMLImageElement | null>(null);
 
   // Photo Form State
   const [photoForm, setPhotoForm] = useState({
@@ -121,15 +134,18 @@ export default function AdminDashboardPage() {
   async function fetchData() {
     setLoading(true);
     try {
-      const [resPhotos, resBrands] = await Promise.all([
+      const [resPhotos, resBrands, resPackages] = await Promise.all([
         fetch("/api/admin/photos"),
         fetch("/api/admin/brands"),
+        fetch("/api/admin/packages"),
       ]);
       const dataPhotos = await resPhotos.json();
       const dataBrands = await resBrands.json();
+      const dataPackages = await resPackages.json();
 
       if (dataPhotos.photos) setPhotos(dataPhotos.photos);
       if (dataBrands.brands) setBrands(dataBrands.brands);
+      if (dataPackages.packages) setPackages(dataPackages.packages);
     } catch (err) {
       console.error("Error fetching data:", err);
     } finally {
@@ -155,10 +171,6 @@ export default function AdminDashboardPage() {
     reader.onload = () => {
       if (reader.result) {
         setCropperSrc(reader.result as string);
-        setCropZoom(1);
-        setCropRotation(0);
-        setCropOffsetX(0);
-        setCropOffsetY(0);
         setCropRatio(target === "brand" ? "banner" : "portrait");
         setModalMode("crop");
       }
@@ -168,8 +180,6 @@ export default function AdminDashboardPage() {
 
   // Step 2: Receive Cropped Blob & Upload
   const handleCropComplete = async (blob: Blob) => {
-    setIsCropping(true);
-
     try {
       const formData = new FormData();
       formData.append("file", blob, `cropped-${Date.now()}.webp`);
@@ -214,8 +224,6 @@ export default function AdminDashboardPage() {
       }
     } catch (err: any) {
       showToastMsg(err.message || "Gagal memproses crop gambar", "error");
-    } finally {
-      setIsCropping(false);
     }
   };
 
@@ -279,6 +287,71 @@ export default function AdminDashboardPage() {
       router.refresh();
     } catch (err: any) {
       showToastMsg(err.message || "Terjadi kesalahan", "error");
+    }
+  };
+
+  // Save Package Record
+  const handleSavePackage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!packageForm.name || !packageForm.price || !packageForm.brand_slug) {
+      showToastMsg("Nama Paket, Harga, dan Kategori Sub-Brand wajib diisi!", "error");
+      return;
+    }
+
+    try {
+      const method = editingPackage ? "PUT" : "POST";
+      const payload = editingPackage
+        ? packageForm
+        : {
+            brand_slug: packageForm.brand_slug,
+            name: packageForm.name,
+            price: packageForm.price,
+            period: packageForm.period,
+            description: packageForm.description,
+            features: packageForm.features,
+            is_popular: packageForm.is_popular,
+            popular_label: packageForm.popular_label,
+            wa_message: packageForm.wa_message,
+            display_order: packageForm.display_order,
+          };
+
+      const res = await fetch("/api/admin/packages", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal menyimpan paket harga");
+
+      showToastMsg(
+        editingPackage ? "Paket harga berhasil diperbarui!" : "Paket harga baru berhasil ditambahkan!",
+        "success"
+      );
+      setShowPackageModal(false);
+      fetchData();
+      router.refresh();
+    } catch (err: any) {
+      showToastMsg(err.message || "Terjadi kesalahan saat menyimpan paket", "error");
+    }
+  };
+
+  // Delete Package
+  const handleDeletePackage = async (id: string) => {
+    if (!confirm("Apakah Anda yakin ingin menghapus paket harga ini?")) return;
+
+    try {
+      const res = await fetch(`/api/admin/packages?id=${id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Gagal menghapus paket harga");
+
+      showToastMsg("Paket harga berhasil dihapus!", "success");
+      fetchData();
+      router.refresh();
+    } catch (err: any) {
+      showToastMsg(err.message || "Gagal menghapus paket", "error");
     }
   };
 
@@ -371,6 +444,46 @@ export default function AdminDashboardPage() {
     setShowBrandModal(true);
   };
 
+  const openAddPackageModal = () => {
+    setEditingPackage(null);
+    setPackageForm({
+      id: "",
+      brand_slug: packageCategoryFilter === "all" ? "swara-studio" : packageCategoryFilter,
+      name: "",
+      price: "Rp ",
+      period: "/ sesi",
+      description: "",
+      features: [
+        "1 Sesi Foto Studio / Outdoor",
+        "Retouched HD Masterpiece Files",
+        "All Softcopy Files (Google Drive)",
+      ],
+      is_popular: false,
+      popular_label: "PALING POPULER",
+      wa_message: "Halo Prabaswara, saya tertarik dengan paket ini.",
+      display_order: packages.length + 1,
+    });
+    setShowPackageModal(true);
+  };
+
+  const openEditPackageModal = (pkg: PackageItem) => {
+    setEditingPackage(pkg);
+    setPackageForm({
+      id: pkg.id,
+      brand_slug: pkg.brand_slug || "swara-studio",
+      name: pkg.name || "",
+      price: pkg.price || "",
+      period: pkg.period || "",
+      description: pkg.description || "",
+      features: Array.isArray(pkg.features) ? [...pkg.features] : [],
+      is_popular: Boolean(pkg.is_popular),
+      popular_label: pkg.popular_label || "PALING POPULER",
+      wa_message: pkg.wa_message || "",
+      display_order: pkg.display_order || 0,
+    });
+    setShowPackageModal(true);
+  };
+
   const resetPhotoForm = () => {
     setPhotoForm({
       title: "",
@@ -392,10 +505,22 @@ export default function AdminDashboardPage() {
     { slug: "swara-wedding", title: "Swara Wedding (Foto Pernikahan & Momen Romantis)" },
   ];
 
+  const brandNamesMap: Record<string, string> = {
+    "swara-gallery": "Swara Gallery",
+    "swara-studio": "Swara Studio",
+    "swara-moment": "Swara Moment",
+    "swara-wedding": "Swara Wedding",
+  };
+
   const filteredPhotos = photos.filter((p) => {
     if (locationFilter === "all") return true;
     if (locationFilter === "featured") return p.is_featured;
     return p.brand_slug === locationFilter;
+  });
+
+  const filteredPackages = packages.filter((pkg) => {
+    if (packageCategoryFilter === "all") return true;
+    return pkg.brand_slug === packageCategoryFilter;
   });
 
   if (authenticated === null || loading) {
@@ -451,6 +576,18 @@ export default function AdminDashboardPage() {
           </button>
 
           <button
+            onClick={() => setActiveTab("packages")}
+            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
+              activeTab === "packages"
+                ? "bg-[#C9A961] text-neutral-950 shadow-md font-bold"
+                : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+            }`}
+          >
+            <Tag className="w-4 h-4" />
+            <span>3. Kelola Paket Harga & Pricelist ({packages.length})</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab("settings")}
             className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
               activeTab === "settings"
@@ -459,7 +596,7 @@ export default function AdminDashboardPage() {
             }`}
           >
             <Settings className="w-4 h-4" />
-            <span>3. Gambar About & Kontak WA</span>
+            <span>4. Gambar About & Kontak WA</span>
           </button>
         </div>
 
@@ -596,7 +733,181 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-        {/* TAB 3: GAMBAR ABOUT & PENGATURAN KONTAK */}
+        {/* TAB 3: KELOLA PAKET HARGA & PRICELIST */}
+        {activeTab === "packages" && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-neutral-900 p-6 rounded-2xl border border-neutral-800">
+              <div>
+                <h2 className="font-serif-heading text-xl font-bold text-white">
+                  Kelola Pricelist & Paket Harga Sub-Brand
+                </h2>
+                <p className="text-xs text-neutral-400 font-light mt-1">
+                  Atur nama paket, daftar benefit/fasilitas, harga, label popularitas, dan kategori sub-brand. Perubahan akan langsung tampil di Beranda dan Halaman Kategori!
+                </p>
+              </div>
+
+              <button
+                onClick={openAddPackageModal}
+                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg active:scale-95 shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Tambah Paket Baru</span>
+              </button>
+            </div>
+
+            {/* Filter Buttons for Packages */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 pb-2">
+              <span className="text-xs text-neutral-400 font-medium mr-2">Filter Kategori Sub-Brand:</span>
+              <button
+                onClick={() => setPackageCategoryFilter("all")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  packageCategoryFilter === "all"
+                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
+                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+                }`}
+              >
+                Semua Paket ({packages.length})
+              </button>
+              <button
+                onClick={() => setPackageCategoryFilter("swara-gallery")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  packageCategoryFilter === "swara-gallery"
+                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
+                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+                }`}
+              >
+                🖼️ Swara Gallery ({packages.filter((p) => p.brand_slug === "swara-gallery").length})
+              </button>
+              <button
+                onClick={() => setPackageCategoryFilter("swara-studio")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  packageCategoryFilter === "swara-studio"
+                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
+                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+                }`}
+              >
+                📸 Swara Studio ({packages.filter((p) => p.brand_slug === "swara-studio").length})
+              </button>
+              <button
+                onClick={() => setPackageCategoryFilter("swara-moment")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  packageCategoryFilter === "swara-moment"
+                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
+                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+                }`}
+              >
+                📅 Swara Moment ({packages.filter((p) => p.brand_slug === "swara-moment").length})
+              </button>
+              <button
+                onClick={() => setPackageCategoryFilter("swara-wedding")}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                  packageCategoryFilter === "swara-wedding"
+                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
+                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
+                }`}
+              >
+                💍 Swara Wedding ({packages.filter((p) => p.brand_slug === "swara-wedding").length})
+              </button>
+            </div>
+
+            {/* Packages Grid */}
+            {filteredPackages.length === 0 ? (
+              <div className="text-center py-20 bg-neutral-900/50 rounded-2xl border border-neutral-800/80 space-y-4">
+                <p className="text-sm text-neutral-400">Belum ada paket harga untuk kategori ini.</p>
+                <button
+                  onClick={openAddPackageModal}
+                  className="px-4 py-2 bg-[#C9A961] text-neutral-950 text-xs font-bold rounded-xl uppercase tracking-wider hover:bg-[#B8964E] transition-all cursor-pointer"
+                >
+                  + Tambah Paket Baru
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredPackages.map((pkg) => (
+                  <div
+                    key={pkg.id}
+                    className={`relative flex flex-col justify-between rounded-2xl p-6 bg-neutral-900 border transition-all ${
+                      pkg.is_popular ? "border-[#C9A961] shadow-lg shadow-[#C9A961]/10" : "border-neutral-800"
+                    }`}
+                  >
+                    {pkg.is_popular && (
+                      <div className="absolute -top-3 right-4 px-3 py-1 rounded-full bg-[#C9A961] text-neutral-950 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" />
+                        <span>{pkg.popular_label || "POPULER"}</span>
+                      </div>
+                    )}
+
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-[#C9A961]/15 text-[#C9A961] border border-[#C9A961]/30">
+                          {brandNamesMap[pkg.brand_slug] || pkg.brand_slug}
+                        </span>
+                        <span className="text-[10px] text-neutral-500 font-mono">
+                          Urutan: {pkg.display_order || 0}
+                        </span>
+                      </div>
+
+                      <div>
+                        <h3 className="font-serif-heading text-lg font-bold text-white">
+                          {pkg.name}
+                        </h3>
+                        <p className="text-xs text-neutral-400 mt-1 line-clamp-2 min-h-[32px]">
+                          {pkg.description}
+                        </p>
+                      </div>
+
+                      <div className="pt-2 border-t border-neutral-800 flex items-baseline gap-1">
+                        <span className="font-serif-heading text-2xl font-bold text-[#C9A961]">
+                          {pkg.price}
+                        </span>
+                        {pkg.period && (
+                          <span className="text-xs text-neutral-400">{pkg.period}</span>
+                        )}
+                      </div>
+
+                      {/* Benefits list */}
+                      {pkg.features && pkg.features.length > 0 && (
+                        <div className="space-y-2 pt-2 border-t border-neutral-800/80">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 block">
+                            Daftar Benefit ({pkg.features.length}):
+                          </span>
+                          <ul className="space-y-1.5 max-h-[140px] overflow-y-auto custom-scrollbar pr-1">
+                            {pkg.features.map((feat, idx) => (
+                              <li key={idx} className="flex items-start gap-2 text-xs text-neutral-300">
+                                <Check className="w-3.5 h-3.5 text-[#C9A961] shrink-0 mt-0.5" />
+                                <span className="line-clamp-2">{feat}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Card Actions */}
+                    <div className="pt-6 mt-4 border-t border-neutral-800 flex items-center gap-2">
+                      <button
+                        onClick={() => openEditPackageModal(pkg)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <Edit3 className="w-3.5 h-3.5 text-[#C9A961]" />
+                        <span>Edit Paket</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeletePackage(pkg.id)}
+                        className="py-2 px-3 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-300 text-xs font-semibold transition-all cursor-pointer border border-red-800/50"
+                        title="Hapus Paket"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 4: GAMBAR ABOUT & PENGATURAN KONTAK */}
         {activeTab === "settings" && (
           <form onSubmit={handleSaveSettings} className="space-y-8">
             {/* Section A: Gambar Section About Prabaswara */}
@@ -722,8 +1033,8 @@ export default function AdminDashboardPage() {
         )}
       </div>
 
-      {/* SINGLE UNIFIED MODAL FOR PHOTO / CROP / BRAND COVER */}
-      {(showPhotoModal || showBrandModal) && (
+      {/* SINGLE UNIFIED MODAL FOR PHOTO / CROP / BRAND COVER / PACKAGE */}
+      {(showPhotoModal || showBrandModal || showPackageModal) && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -737,6 +1048,10 @@ export default function AdminDashboardPage() {
                 <h3 className="font-serif-heading text-xl font-bold text-white">
                   {modalMode === "crop"
                     ? "Editor Potong Gambar (Crop)"
+                    : showPackageModal
+                    ? editingPackage
+                      ? "Edit Paket Harga"
+                      : "Tambah Paket Harga Baru"
                     : showBrandModal
                     ? `Ganti Cover Banner ${brandForm.title}`
                     : editingPhoto
@@ -746,6 +1061,8 @@ export default function AdminDashboardPage() {
                 <p className="text-xs text-neutral-400 font-light">
                   {modalMode === "crop"
                     ? "Sesuaikan proporsi foto lalu klik Terapkan Crop."
+                    : showPackageModal
+                    ? "Isi detail nama paket, harga, benefit, dan kategori sub-brand."
                     : "Pilih file gambar baru untuk dipotong (crop) dan diunggah."}
                 </p>
               </div>
@@ -757,6 +1074,7 @@ export default function AdminDashboardPage() {
                   } else {
                     setShowPhotoModal(false);
                     setShowBrandModal(false);
+                    setShowPackageModal(false);
                   }
                 }}
                 className="p-2 rounded-full bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
@@ -781,7 +1099,6 @@ export default function AdminDashboardPage() {
                   }}
                 />
               )}
-
             </div>
 
             {/* MODE 2A: BRAND COVER EDIT FORM */}
@@ -979,6 +1296,250 @@ export default function AdminDashboardPage() {
                   >
                     <Save className="w-4 h-4" />
                     <span>{editingPhoto ? "Simpan Perubahan" : "Upload & Simpan"}</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* MODE 2C: PACKAGE EDIT FORM */}
+            {modalMode === "form" && showPackageModal && (
+              <form onSubmit={handleSavePackage} className="flex-1 flex flex-col overflow-hidden">
+                <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
+                  {/* Category & Name */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
+                        Kategori Sub-Brand *
+                      </label>
+                      <select
+                        value={packageForm.brand_slug}
+                        onChange={(e) => setPackageForm({ ...packageForm, brand_slug: e.target.value })}
+                        className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
+                      >
+                        {categoryOptions.map((c) => (
+                          <option key={c.slug} value={c.slug}>
+                            {c.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
+                        Urutan Tampil
+                      </label>
+                      <input
+                        type="number"
+                        value={packageForm.display_order}
+                        onChange={(e) =>
+                          setPackageForm({ ...packageForm, display_order: Number(e.target.value) })
+                        }
+                        className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
+                      Nama Paket Pricelist *
+                    </label>
+                    <input
+                      type="text"
+                      value={packageForm.name}
+                      onChange={(e) => setPackageForm({ ...packageForm, name: e.target.value })}
+                      placeholder="Misal: Paket Personal & Studio / Grand Masterpiece Wedding"
+                      className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
+                      required
+                    />
+                  </div>
+
+                  {/* Price & Period */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
+                        Harga Paket *
+                      </label>
+                      <input
+                        type="text"
+                        value={packageForm.price}
+                        onChange={(e) => setPackageForm({ ...packageForm, price: e.target.value })}
+                        placeholder="Misal: Rp 750.000 / Rp 4.500.000"
+                        className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
+                        Keterangan Periode/Sesi
+                      </label>
+                      <input
+                        type="text"
+                        value={packageForm.period}
+                        onChange={(e) => setPackageForm({ ...packageForm, period: e.target.value })}
+                        placeholder="Misal: / sesi photo / hari pernikahan"
+                        className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
+                      Deskripsi Ringkas Paket
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={packageForm.description}
+                      onChange={(e) => setPackageForm({ ...packageForm, description: e.target.value })}
+                      placeholder="Penjelasan singkat mengenai paket harga ini..."
+                      className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
+                    />
+                  </div>
+
+                  {/* Dynamic Features / Benefits List */}
+                  <div className="space-y-3 p-4 rounded-2xl bg-neutral-950 border border-neutral-800">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-[#C9A961] block">
+                      Fasilitas & Benefit Paket (List Point):
+                    </label>
+
+                    {packageForm.features.length > 0 && (
+                      <ul className="space-y-2">
+                        {packageForm.features.map((feat, idx) => (
+                          <li
+                            key={idx}
+                            className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-xs text-neutral-200"
+                          >
+                            <span className="flex items-center gap-2">
+                              <Check className="w-3.5 h-3.5 text-[#C9A961]" />
+                              <span>{feat}</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = packageForm.features.filter((_, i) => i !== idx);
+                                setPackageForm({ ...packageForm, features: updated });
+                              }}
+                              className="p-1 rounded-lg text-neutral-400 hover:text-red-400 transition-colors cursor-pointer"
+                              title="Hapus Benefit Ini"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+
+                    {/* Add new feature input */}
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="text"
+                        value={newFeatureText}
+                        onChange={(e) => setNewFeatureText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            if (newFeatureText.trim()) {
+                              setPackageForm({
+                                ...packageForm,
+                                features: [...packageForm.features, newFeatureText.trim()],
+                              });
+                              setNewFeatureText("");
+                            }
+                          }
+                        }}
+                        placeholder="Ketik poin benefit (misal: 10 Foto Retouched HD) lalu klik +"
+                        className="flex-1 px-3.5 py-2.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (newFeatureText.trim()) {
+                            setPackageForm({
+                              ...packageForm,
+                              features: [...packageForm.features, newFeatureText.trim()],
+                            });
+                            setNewFeatureText("");
+                          }
+                        }}
+                        className="px-4 py-2.5 bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 font-bold rounded-xl text-xs uppercase tracking-wider transition-all cursor-pointer shrink-0"
+                      >
+                        + Tambah
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Is Popular & Label */}
+                  <div className="p-4 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id="isPopularPkg"
+                        checked={packageForm.is_popular}
+                        onChange={(e) =>
+                          setPackageForm({ ...packageForm, is_popular: e.target.checked })
+                        }
+                        className="w-4 h-4 rounded border-neutral-700 accent-[#C9A961] cursor-pointer"
+                      />
+                      <label
+                        htmlFor="isPopularPkg"
+                        className="text-xs text-neutral-200 cursor-pointer font-semibold"
+                      >
+                        Tandai Sebagai <span className="text-[#C9A961]">Paket Populer / Rekomendasi</span>
+                      </label>
+                    </div>
+
+                    {packageForm.is_popular && (
+                      <div>
+                        <label className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 block mb-1">
+                          Label Badge Populer
+                        </label>
+                        <input
+                          type="text"
+                          value={packageForm.popular_label}
+                          onChange={(e) =>
+                            setPackageForm({ ...packageForm, popular_label: e.target.value })
+                          }
+                          placeholder="PALING POPULER / REKOMENDASI BISNIS"
+                          className="w-full px-4 py-2.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Custom WA Message */}
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
+                      Pesan WhatsApp Otomatis (Saat Tombol Diklik)
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={packageForm.wa_message}
+                      onChange={(e) =>
+                        setPackageForm({ ...packageForm, wa_message: e.target.value })
+                      }
+                      placeholder="Halo Prabaswara, saya tertarik dengan paket ini..."
+                      className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
+                    />
+                  </div>
+                </div>
+
+                {/* Form Actions Footer */}
+                <div className="p-4 border-t border-neutral-800 shrink-0 bg-neutral-950/90 flex items-center justify-end gap-3 z-10">
+                  <button
+                    type="button"
+                    onClick={() => setShowPackageModal(false)}
+                    className="px-5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-semibold uppercase tracking-wider cursor-pointer"
+                  >
+                    Batal
+                  </button>
+
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider shadow-lg active:scale-95 cursor-pointer flex items-center gap-2"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{editingPackage ? "Simpan Perubahan Paket" : "Simpan Paket Baru"}</span>
                   </button>
                 </div>
               </form>

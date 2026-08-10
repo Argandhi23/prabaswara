@@ -2,9 +2,11 @@ import { supabase, isSupabaseConfigured } from "./client";
 import {
   BrandData,
   MOCK_BRANDS,
+  MOCK_PACKAGES,
   MOCK_PHOTOS,
   MOCK_SITE_SETTINGS,
   MOCK_TESTIMONIALS,
+  PackageData,
   PhotoData,
   SiteSettingsData,
   TestimonialData,
@@ -227,3 +229,54 @@ export async function getTestimonials(brandSlug?: string): Promise<TestimonialDa
     return MOCK_TESTIMONIALS.filter((t) => t.brandSlug === brandSlug);
   }
 }
+
+/**
+ * Fetch pricing packages with optional brand filter
+ */
+export async function getPackages(brandSlug?: string): Promise<PackageData[]> {
+  if (!isSupabaseConfigured) {
+    if (!brandSlug) return MOCK_PACKAGES;
+    return MOCK_PACKAGES.filter((p) => p.brandSlug === brandSlug);
+  }
+
+  try {
+    let query = supabase.from("packages").select("*").order("display_order", { ascending: true });
+    if (brandSlug) {
+      query = query.eq("brand_slug", brandSlug);
+    }
+
+    const { data, error } = await query;
+
+    if (error || !data || data.length === 0) {
+      if (!brandSlug) return MOCK_PACKAGES;
+      return MOCK_PACKAGES.filter((p) => p.brandSlug === brandSlug);
+    }
+
+    const brandMap: Record<string, string> = {
+      "swara-gallery": "Swara Gallery",
+      "swara-studio": "Swara Studio",
+      "swara-moment": "Swara Moment",
+      "swara-wedding": "Swara Wedding",
+    };
+
+    return data.map((p) => ({
+      _id: p.id,
+      brandSlug: p.brand_slug,
+      brandTag: brandMap[p.brand_slug] || p.brand_slug,
+      name: p.name,
+      price: p.price,
+      period: p.period || "",
+      description: p.description || "",
+      features: Array.isArray(p.features) ? p.features : [],
+      isPopular: p.is_popular || false,
+      popularLabel: p.popular_label || "PALING POPULER",
+      waMessage: p.wa_message || "",
+      order: p.display_order || 0,
+    }));
+  } catch (error) {
+    console.warn("Error fetching packages from Supabase:", error);
+    if (!brandSlug) return MOCK_PACKAGES;
+    return MOCK_PACKAGES.filter((p) => p.brandSlug === brandSlug);
+  }
+}
+

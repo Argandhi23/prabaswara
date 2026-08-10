@@ -31,6 +31,21 @@ export interface TestimonialData {
   brandSlug?: string;
 }
 
+export interface PackageData {
+  _id: string;
+  brandSlug: string;
+  brandTag: string;
+  name: string;
+  price: string;
+  period: string;
+  description: string;
+  features: string[];
+  isPopular: boolean;
+  popularLabel?: string;
+  waMessage: string;
+  order: number;
+}
+
 export interface SiteSettingsData {
   companyName: string;
   tagline: string;
@@ -319,5 +334,196 @@ export const MOCK_TESTIMONIALS: TestimonialData[] = [
       "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=300&auto=format&fit=crop",
     rating: 5,
     brandSlug: "swara-moment",
+  },
+];
+
+export const MOCK_PACKAGES: PackageData[] = [
+  // Swara Studio
+  {
+    _id: "pkg-studio-1",
+    brandSlug: "swara-studio",
+    brandTag: "Swara Studio",
+    name: "Personal Portrait & Studio",
+    price: "Rp 750.000",
+    period: "/ sesi photo",
+    description:
+      "Cocok untuk foto personal portrait, wisuda, profil profesional, dan kebutuhan portofolio komersial.",
+    isPopular: false,
+    features: [
+      "1 Jam Sesi Foto Studio Eksklusif",
+      "10 Foto Retouched HD Masterpiece",
+      "All Softcopy Files (Google Drive)",
+      "1 Cetak Foto 10R + Frame Minimalis",
+      "Arahan Pose & Style Guide Personal",
+      "Kapasitas Maksimal 2 Person",
+    ],
+    waMessage:
+      "Halo Prabaswara, saya tertarik dengan Paket Personal Portrait & Studio (Rp 750.000) dari Swara Studio.",
+    order: 1,
+  },
+  {
+    _id: "pkg-studio-2",
+    brandSlug: "swara-studio",
+    brandTag: "Swara Studio",
+    name: "Commercial & Lookbook Studio",
+    price: "Rp 2.250.000",
+    period: "/ 4 jam sesi",
+    description:
+      "Penawaran ideal untuk brand fashion, lookbook produk, katalog bisnis, dan kebutuhan komersial.",
+    isPopular: true,
+    popularLabel: "REKOMENDASI BISNIS",
+    features: [
+      "Half-Day Studio Session (4 Jam)",
+      "30 Foto Retouched High-End Commercial",
+      "Master Color Grading + Color Matched",
+      "Commercial Rights & Digital Usage",
+      "Lighting & Background Setup Kustom",
+      "Asisten Fotografer & Arahan Gaya",
+    ],
+    waMessage:
+      "Halo Prabaswara, saya tertarik dengan Paket Commercial & Lookbook Studio (Rp 2.250.000) dari Swara Studio.",
+    order: 2,
+  },
+
+  // Swara Gallery
+  {
+    _id: "pkg-gallery-1",
+    brandSlug: "swara-gallery",
+    brandTag: "Swara Gallery",
+    name: "Fine Art Print Limited Edition",
+    price: "Rp 1.200.000",
+    period: "/ cetakan karya",
+    description:
+      "Cetak foto seni berkualitas museum (archival fine art paper) untuk dekorasi interior hunian dan kantor.",
+    isPopular: false,
+    features: [
+      "Cetak Archival Cotton Rag Paper A2/16R",
+      "Frame Kayu Jati Minimalis + Museum Glass",
+      "Sertifikat Keaslian Tanda Tangan Artis",
+      "Nomor Seri Terbatas (Limited Run)",
+      "Garansi Ketahanan Warna Hingga 50 Tahun",
+      "Bebas Biaya Pengiriman Jabodetabek",
+    ],
+    waMessage:
+      "Halo Prabaswara, saya berminat memesan karya Fine Art Print Limited Edition dari Swara Gallery.",
+    order: 1,
+  },
+  {
+    _id: "pkg-gallery-2",
+    brandSlug: "swara-gallery",
+    brandTag: "Swara Gallery",
+    name: "Custom Visual Art & Licensing",
+    price: "Rp 3.500.000",
+    period: "/ lisensi proyek",
+    description:
+      "Layanan kurasi karya seni visual kustom dan lisensi penggunaan foto fine art untuk ruang komersial & publik.",
+    isPopular: true,
+    popularLabel: "KOLEKTOR PILIHAN",
+    features: [
+      "Konsultasi Kurasi Interior & Visual Space",
+      "Hak Lisensi Penggunaan Komersial Eksklusif",
+      "High-Resolution Master Files 60MP",
+      "Custom Framing & Material Speciality",
+      "Direct Artist Consultation Session",
+      "Dokumentasi Instalasi Karya",
+    ],
+    waMessage:
+      "Halo Prabaswara, saya tertarik dengan konsultasi lisensi karya visual kustom di Swara Gallery.",
+    order: 2,
+  },
+
+  // Swara Moment
+  {
+    _id: "pkg-moment-1",
+    brandSlug: "swara-moment",
+    brandTag: "Swara Moment",
+    name: "Intimate Birthday & Celebration",
+    price: "Rp 1.850.000",
+    period: "/ event & sesi",
+    description:
+      "Pilihan ideal untuk foto keluarga, grup, selebrasi ulang tahun, maternity, hingga acara intimate.",
+    isPopular: true,
+    popularLabel: "PALING POPULER",
+    features: [
+      "2 - 3 Jam Sesi Foto (Studio / Outdoor)",
+      "25 Foto Retouched Premium",
+      "Unlimited Softcopy High-Res Files",
+      "2 Cetak Foto 10R + Frame Kayu Eksklusif",
+      "Free Konsultasi Moodboard & Konsep",
+      "Kapasitas Dokumentasi Hingga 6 Person",
+    ],
+    waMessage:
+      "Halo Prabaswara, saya tertarik dengan Paket Intimate Birthday & Celebration (Rp 1.850.000) dari Swara Moment.",
+    order: 1,
+  },
+  {
+    _id: "pkg-moment-2",
+    brandSlug: "swara-moment",
+    brandTag: "Swara Moment",
+    name: "Corporate Event & Gathering",
+    price: "Rp 3.200.000",
+    period: "/ event (5 jam)",
+    description:
+      "Dokumentasi profesional untuk acara gala dinner perusahaan, seminar, launching produk, dan gathering.",
+    isPopular: false,
+    features: [
+      "Liputan Acara Hingga 5 Jam Sesi",
+      "1 Fotografer Senior + 1 Assistant",
+      "100+ Foto Edited Color Corrected",
+      "Same-Day Preview Photos (10 Image)",
+      "Google Drive Folder Akses Klien",
+      "Hak Cipta Publikasi Media Perusahaan",
+    ],
+    waMessage:
+      "Halo Prabaswara, saya tertarik dengan Paket Corporate Event & Gathering (Rp 3.200.000) dari Swara Moment.",
+    order: 2,
+  },
+
+  // Swara Wedding
+  {
+    _id: "pkg-wedding-1",
+    brandSlug: "swara-wedding",
+    brandTag: "Swara Wedding",
+    name: "Intimate Wedding Essential",
+    price: "Rp 4.500.000",
+    period: "/ hari pernikahan",
+    description:
+      "Layanan lengkap dokumentasi foto & video pernikahan bergaya timeless, emosional, dan bernilai seni tinggi.",
+    isPopular: false,
+    features: [
+      "Full Day Coverage (Hingga 8 Jam Sesi)",
+      "2 Fotografer + 1 Videografer Profesional",
+      "50+ Foto Retouched Color Graded",
+      "Photobook Album Kolase Premium 20 Hal",
+      "Video Cinematic Highlight (3-5 Menit)",
+      "Custom Wooden USB Flashdisk Box",
+    ],
+    waMessage:
+      "Halo Prabaswara, saya tertarik dengan Paket Intimate Wedding Essential (Rp 4.500.000) dari Swara Wedding.",
+    order: 1,
+  },
+  {
+    _id: "pkg-wedding-2",
+    brandSlug: "swara-wedding",
+    brandTag: "Swara Wedding",
+    name: "Grand Masterpiece Wedding",
+    price: "Rp 8.500.000",
+    period: "/ full wedding package",
+    description:
+      "Paket pernikahan paling komprehensif mencakup Akad/Holy Matrimony, Resepsi, album fisik eksklusif, dan teaser video.",
+    isPopular: true,
+    popularLabel: "EKSKLUSIF WEDDING",
+    features: [
+      "Coverage Pernikahan Lengkap (Akad & Resepsi)",
+      "3 Fotografer + 2 Videografer + Drone Pilot",
+      "100+ Foto Retouched High-End Masterpiece",
+      "2 Photobook Luxury Canvas Leather Album 30 Hal",
+      "Video Cinematic Teaser (1 Menit) + Film (10-15 Menit)",
+      "Pre-Wedding Studio Session Termasuk (Free)",
+      "Exclusive Wooden Box Presentation + Framed 16R",
+    ],
+    waMessage:
+      "Halo Prabaswara, saya tertarik dengan Paket Grand Masterpiece Wedding (Rp 8.500.000) dari Swara Wedding.",
+    order: 2,
   },
 ];

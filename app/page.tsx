@@ -5,6 +5,7 @@ import { Metadata } from "next";
 import {
   getBrands,
   getFeaturedPhotos,
+  getPackages,
   getSiteSettings,
   getTestimonials,
 } from "@/lib/supabase/data";
@@ -37,11 +38,12 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
-  const [settings, brands, photos, testimonials] = await Promise.all([
+  const [settings, brands, photos, testimonials, packages] = await Promise.all([
     getSiteSettings(),
     getBrands(),
     getFeaturedPhotos(),
     getTestimonials(),
+    getPackages(),
   ]);
 
   const mainWaLink = generateWhatsAppLink({
@@ -61,7 +63,7 @@ export default async function HomePage() {
       <BrandShowcase brands={brands} whatsappNumber={settings.whatsappNumber} />
 
       {/* Paket Harga / Pricing Section */}
-      <PricingSection whatsappNumber={settings.whatsappNumber} />
+      <PricingSection packages={packages} whatsappNumber={settings.whatsappNumber} />
 
       {/* Featured Gallery (White #FFFFFF) */}
 

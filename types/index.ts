@@ -51,3 +51,19 @@ export interface AdminToast {
   message: string;
   type: "success" | "error";
 }
+
+export interface PackageItem {
+  id: string;
+  brand_slug: string;
+  name: string;
+  price: string;
+  period?: string;
+  description?: string;
+  features: string[];
+  is_popular: boolean;
+  popular_label?: string;
+  wa_message?: string;
+  display_order?: number;
+  created_at?: string;
+}
+
