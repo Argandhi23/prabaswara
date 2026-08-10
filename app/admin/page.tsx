@@ -324,6 +324,19 @@ export default function AdminDashboardPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Gagal menyimpan paket harga");
 
+      const savedPkg: PackageItem = data.package || {
+        id: editingPackage ? editingPackage.id : `pkg-${Date.now()}`,
+        ...payload,
+      };
+
+      if (editingPackage) {
+        setPackages((prev) =>
+          prev.map((p) => (p.id === savedPkg.id ? { ...p, ...savedPkg } : p))
+        );
+      } else {
+        setPackages((prev) => [...prev, savedPkg]);
+      }
+
       showToastMsg(
         editingPackage ? "Paket harga berhasil diperbarui!" : "Paket harga baru berhasil ditambahkan!",
         "success"
@@ -463,6 +476,7 @@ export default function AdminDashboardPage() {
       wa_message: "Halo Prabaswara, saya tertarik dengan paket ini.",
       display_order: packages.length + 1,
     });
+    setModalMode("form");
     setShowPackageModal(true);
   };
 
@@ -481,6 +495,7 @@ export default function AdminDashboardPage() {
       wa_message: pkg.wa_message || "",
       display_order: pkg.display_order || 0,
     });
+    setModalMode("form");
     setShowPackageModal(true);
   };
 
