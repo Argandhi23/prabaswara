@@ -230,13 +230,17 @@ export async function getTestimonials(brandSlug?: string): Promise<TestimonialDa
   }
 }
 
+import { getPersistedPackages } from "@/lib/packageStore";
+
 /**
  * Fetch pricing packages with optional brand filter
  */
 export async function getPackages(brandSlug?: string): Promise<PackageData[]> {
+  const localPackages = getPersistedPackages();
+
   if (!isSupabaseConfigured) {
-    if (!brandSlug) return MOCK_PACKAGES;
-    return MOCK_PACKAGES.filter((p) => p.brandSlug === brandSlug);
+    if (!brandSlug) return localPackages;
+    return localPackages.filter((p) => p.brandSlug === brandSlug);
   }
 
   try {
@@ -248,8 +252,8 @@ export async function getPackages(brandSlug?: string): Promise<PackageData[]> {
     const { data, error } = await query;
 
     if (error || !data || data.length === 0) {
-      if (!brandSlug) return MOCK_PACKAGES;
-      return MOCK_PACKAGES.filter((p) => p.brandSlug === brandSlug);
+      if (!brandSlug) return localPackages;
+      return localPackages.filter((p) => p.brandSlug === brandSlug);
     }
 
     const brandMap: Record<string, string> = {
@@ -275,8 +279,8 @@ export async function getPackages(brandSlug?: string): Promise<PackageData[]> {
     }));
   } catch (error) {
     console.warn("Error fetching packages from Supabase:", error);
-    if (!brandSlug) return MOCK_PACKAGES;
-    return MOCK_PACKAGES.filter((p) => p.brandSlug === brandSlug);
+    if (!brandSlug) return localPackages;
+    return localPackages.filter((p) => p.brandSlug === brandSlug);
   }
 }
 

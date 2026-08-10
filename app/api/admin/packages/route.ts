@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminSession } from "@/lib/adminAuth";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
-import { MOCK_PACKAGES, saveMockPackage, deleteMockPackage } from "@/lib/mockData";
+import {
+  getPersistedPackages,
+  savePersistedPackage,
+  deletePersistedPackage,
+} from "@/lib/packageStore";
 import { revalidatePath } from "next/cache";
 
 function revalidateAllPages() {
@@ -19,8 +23,10 @@ function revalidateAllPages() {
 
 export async function GET() {
   try {
+    const diskPackages = getPersistedPackages();
+
     if (!isSupabaseConfigured) {
-      const formattedMock = MOCK_PACKAGES.map((p) => ({
+      const formattedMock = diskPackages.map((p) => ({
         id: p._id,
         brand_slug: p.brandSlug,
         name: p.name,
@@ -42,7 +48,7 @@ export async function GET() {
       .order("display_order", { ascending: true });
 
     if (error || !data || data.length === 0) {
-      const formattedMock = MOCK_PACKAGES.map((p) => ({
+      const formattedMock = diskPackages.map((p) => ({
         id: p._id,
         brand_slug: p.brandSlug,
         name: p.name,
@@ -104,8 +110,8 @@ export async function POST(req: NextRequest) {
       display_order: Number(display_order) || 0,
     };
 
-    // Always update in-memory state
-    saveMockPackage(newPkg);
+    // Always persist to disk so public pages update immediately
+    savePersistedPackage(newPkg);
 
     if (isSupabaseConfigured) {
       try {
@@ -132,7 +138,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ success: true, package: data[0] });
         }
       } catch (dbErr) {
-        console.warn("Supabase insert warning, falling back to mock state:", dbErr);
+        console.warn("Supabase insert warning, falling back to disk state:", dbErr);
       }
     }
 
@@ -181,8 +187,8 @@ export async function PUT(req: NextRequest) {
       display_order: Number(display_order) || 0,
     };
 
-    // Always update in-memory state
-    saveMockPackage(updateFields);
+    // Always persist to disk so public pages update immediately
+    savePersistedPackage(updateFields);
 
     if (isSupabaseConfigured) {
       try {
@@ -209,7 +215,7 @@ export async function PUT(req: NextRequest) {
           return NextResponse.json({ success: true, package: data[0] });
         }
       } catch (dbErr) {
-        console.warn("Supabase update warning, falling back to mock state:", dbErr);
+        console.warn("Supabase update warning, falling back to disk state:", dbErr);
       }
     }
 
@@ -232,8 +238,8 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "ID Paket diperlukan." }, { status: 400 });
     }
 
-    // Always update in-memory state
-    deleteMockPackage(id);
+    // Always delete from disk storage
+    deletePersistedPackage(id);
 
     if (isSupabaseConfigured) {
       try {

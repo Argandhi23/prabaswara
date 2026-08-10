@@ -25,6 +25,7 @@ import PhotoCard from "@/components/admin/PhotoCard";
 import BrandCard from "@/components/admin/BrandCard";
 import AdminToast from "@/components/admin/AdminToast";
 import ImageCropperModal, { CropRatioType } from "@/components/admin/ImageCropperModal";
+import { formatRupiahInput } from "@/lib/formatters";
 
 export default function AdminDashboardPage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
@@ -1377,8 +1378,13 @@ export default function AdminDashboardPage() {
                       <input
                         type="text"
                         value={packageForm.price}
-                        onChange={(e) => setPackageForm({ ...packageForm, price: e.target.value })}
-                        placeholder="Misal: Rp 750.000 / Rp 4.500.000"
+                        onChange={(e) =>
+                          setPackageForm({
+                            ...packageForm,
+                            price: formatRupiahInput(e.target.value),
+                          })
+                        }
+                        placeholder="Ketik nominal misal: 750000 -> Otomatis Rp 750.000"
                         className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
                         required
                       />
