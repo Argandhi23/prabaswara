@@ -527,3 +527,46 @@ export const MOCK_PACKAGES: PackageData[] = [
     order: 2,
   },
 ];
+
+export function saveMockPackage(pkgData: any) {
+  const brandTagMap: Record<string, string> = {
+    "swara-gallery": "Swara Gallery",
+    "swara-studio": "Swara Studio",
+    "swara-moment": "Swara Moment",
+    "swara-wedding": "Swara Wedding",
+  };
+
+  const id = pkgData.id || pkgData._id || `pkg-${Date.now()}`;
+  const brandSlug = pkgData.brand_slug || pkgData.brandSlug || "swara-studio";
+
+  const fullPkg: PackageData = {
+    _id: id,
+    brandSlug,
+    brandTag: brandTagMap[brandSlug] || brandSlug,
+    name: pkgData.name || "Nama Paket",
+    price: pkgData.price || "Rp 0",
+    period: pkgData.period || "",
+    description: pkgData.description || "",
+    features: Array.isArray(pkgData.features) ? pkgData.features : [],
+    isPopular: Boolean(pkgData.is_popular !== undefined ? pkgData.is_popular : pkgData.isPopular),
+    popularLabel: pkgData.popular_label || pkgData.popularLabel || "PALING POPULER",
+    waMessage: pkgData.wa_message || pkgData.waMessage || "",
+    order: Number(pkgData.display_order !== undefined ? pkgData.display_order : pkgData.order) || 0,
+  };
+
+  const index = MOCK_PACKAGES.findIndex((p) => p._id === id);
+  if (index >= 0) {
+    MOCK_PACKAGES[index] = fullPkg;
+  } else {
+    MOCK_PACKAGES.push(fullPkg);
+  }
+  return fullPkg;
+}
+
+export function deleteMockPackage(id: string) {
+  const index = MOCK_PACKAGES.findIndex((p) => p._id === id);
+  if (index >= 0) {
+    MOCK_PACKAGES.splice(index, 1);
+  }
+}
+

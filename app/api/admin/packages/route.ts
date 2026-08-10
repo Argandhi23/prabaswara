@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAdminSession } from "@/lib/adminAuth";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
-import { MOCK_PACKAGES } from "@/lib/mockData";
+import { MOCK_PACKAGES, saveMockPackage, deleteMockPackage } from "@/lib/mockData";
 import { revalidatePath } from "next/cache";
 
 function revalidateAllPages() {
   try {
-    revalidatePath("/");
+    revalidatePath("/", "layout");
     revalidatePath("/swara-gallery");
     revalidatePath("/swara-studio");
     revalidatePath("/swara-moment");
@@ -104,6 +104,9 @@ export async function POST(req: NextRequest) {
       display_order: Number(display_order) || 0,
     };
 
+    // Always update in-memory state
+    saveMockPackage(newPkg);
+
     if (isSupabaseConfigured) {
       try {
         const { data, error } = await supabase
@@ -178,6 +181,9 @@ export async function PUT(req: NextRequest) {
       display_order: Number(display_order) || 0,
     };
 
+    // Always update in-memory state
+    saveMockPackage(updateFields);
+
     if (isSupabaseConfigured) {
       try {
         const dbUpdatePayload: any = {};
@@ -225,6 +231,9 @@ export async function DELETE(req: NextRequest) {
     if (!id) {
       return NextResponse.json({ error: "ID Paket diperlukan." }, { status: 400 });
     }
+
+    // Always update in-memory state
+    deleteMockPackage(id);
 
     if (isSupabaseConfigured) {
       try {
