@@ -82,16 +82,16 @@ export default async function BrandDetailPage({ params }: BrandPageProps) {
       {/* Brand Hero Banner */}
       <section className="relative min-h-[50vh] sm:min-h-[60vh] flex items-center justify-center px-6 md:px-12 overflow-hidden border-b border-neutral-200">
         {/* Background Cover */}
-        <div className="absolute inset-0 z-0">
+        <div className="absolute inset-0 z-0 overflow-hidden">
           <Image
             src={brand.coverImage}
             alt={brand.title}
             fill
             sizes="100vw"
-            className="object-cover opacity-15 grayscale"
+            className="object-cover object-top sm:object-[center_20%] opacity-55 scale-105 transition-transform duration-1000 ease-out"
             priority
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-white via-white/80 to-white/60" />
+          <div className="absolute inset-0 bg-gradient-to-t from-white via-white/60 to-white/15" />
         </div>
 
         {/* Content Header */}
