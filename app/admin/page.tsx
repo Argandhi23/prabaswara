@@ -116,11 +116,17 @@ export default function AdminDashboardPage() {
   // Auth check & data fetching
   useEffect(() => {
     async function checkAuth() {
-      const res = await fetch("/api/admin/auth");
-      if (!res.ok) {
+      try {
+        const res = await fetch("/api/admin/auth");
+        const data = await res.json();
+        if (!data.authenticated) {
+          router.push("/admin/login");
+        } else {
+          setAuthenticated(true);
+          fetchData();
+        }
+      } catch {
         router.push("/admin/login");
-      } else {
-        fetchData();
       }
     }
     checkAuth();
