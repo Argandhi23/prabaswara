@@ -11,12 +11,15 @@ import {
   TestimonialData,
 } from "@/lib/mockData";
 import { getPersistedPackages } from "@/lib/packageStore";
+import { getPersistedSiteSettings } from "@/lib/siteSettingsStore";
 
 /**
- * Fetch Site Settings with mock fallback
+ * Fetch Site Settings with mock/disk fallback
  */
 export async function getSiteSettings(): Promise<SiteSettingsData> {
-  if (!isSupabaseConfigured) return MOCK_SITE_SETTINGS;
+  const localSettings = getPersistedSiteSettings();
+
+  if (!isSupabaseConfigured) return localSettings;
 
   try {
     const { data, error } = await supabase
@@ -26,26 +29,26 @@ export async function getSiteSettings(): Promise<SiteSettingsData> {
       .maybeSingle();
 
     if (error || !data) {
-      return MOCK_SITE_SETTINGS;
+      return localSettings;
     }
 
     return {
-      companyName: data.company_name || MOCK_SITE_SETTINGS.companyName,
-      tagline: data.tagline || MOCK_SITE_SETTINGS.tagline,
-      aboutText: data.about_text || MOCK_SITE_SETTINGS.aboutText,
-      whatsappNumber: data.whatsapp_number || MOCK_SITE_SETTINGS.whatsappNumber,
-      defaultWhatsappMessage: data.default_whatsapp_message || MOCK_SITE_SETTINGS.defaultWhatsappMessage,
-      address: data.address || MOCK_SITE_SETTINGS.address,
-      email: data.email || MOCK_SITE_SETTINGS.email,
-      instagramUrl: data.instagram_url || MOCK_SITE_SETTINGS.instagramUrl,
-      youtubeUrl: data.youtube_url || MOCK_SITE_SETTINGS.youtubeUrl,
-      ogImageUrl: data.og_image_url || MOCK_SITE_SETTINGS.ogImageUrl,
-      aboutImageUrl: data.about_image_url || MOCK_SITE_SETTINGS.aboutImageUrl,
-      cameraImageUrl: data.camera_image_url || MOCK_SITE_SETTINGS.cameraImageUrl,
+      companyName: data.company_name || localSettings.companyName,
+      tagline: data.tagline || localSettings.tagline,
+      aboutText: data.about_text || localSettings.aboutText,
+      whatsappNumber: data.whatsapp_number || localSettings.whatsappNumber,
+      defaultWhatsappMessage: data.default_whatsapp_message || localSettings.defaultWhatsappMessage,
+      address: data.address || localSettings.address,
+      email: data.email || localSettings.email,
+      instagramUrl: data.instagram_url || localSettings.instagramUrl,
+      youtubeUrl: data.youtube_url || localSettings.youtubeUrl,
+      ogImageUrl: data.og_image_url || localSettings.ogImageUrl,
+      aboutImageUrl: data.about_image_url || localSettings.aboutImageUrl,
+      cameraImageUrl: data.camera_image_url || localSettings.cameraImageUrl,
     };
   } catch (error) {
     console.warn("Error fetching site settings from Supabase:", error);
-    return MOCK_SITE_SETTINGS;
+    return localSettings;
   }
 }
 
