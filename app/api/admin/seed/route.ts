@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
           instagram_url: MOCK_SITE_SETTINGS.instagramUrl,
           youtube_url: MOCK_SITE_SETTINGS.youtubeUrl,
           og_image_url: MOCK_SITE_SETTINGS.ogImageUrl,
+          about_image_url: MOCK_SITE_SETTINGS.aboutImageUrl,
+          camera_image_url: MOCK_SITE_SETTINGS.cameraImageUrl,
         },
       ]);
     }

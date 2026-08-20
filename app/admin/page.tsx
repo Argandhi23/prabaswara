@@ -180,6 +180,39 @@ export default function AdminDashboardPage() {
       }
     };
     reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  // Helper to save site settings directly to backend
+  const saveSettingsToBackend = async (newSettings: SiteSettings) => {
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          companyName: newSettings.company_name,
+          tagline: newSettings.tagline,
+          aboutText: newSettings.about_text,
+          whatsappNumber: newSettings.whatsapp_number,
+          defaultWhatsappMessage: newSettings.default_whatsapp_message,
+          address: newSettings.address,
+          email: newSettings.email,
+          instagramUrl: newSettings.instagram_url,
+          youtubeUrl: newSettings.youtube_url,
+          cameraImageUrl: newSettings.camera_image_url,
+          aboutImageUrl: newSettings.about_image_url,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal menyimpan pengaturan ke server");
+
+      showToastMsg("Pengaturan website & gambar About berhasil disimpan!", "success");
+      fetchData();
+      router.refresh();
+    } catch (err: any) {
+      showToastMsg(err.message || "Terjadi kesalahan saat menyimpan pengaturan", "error");
+    }
   };
 
   // Step 2: Receive Cropped Blob & Upload
@@ -203,29 +236,31 @@ export default function AdminDashboardPage() {
           imageUrl: uploadResult.url,
           aspectRatio: cropRatio === "free" ? "portrait" : cropRatio,
         }));
+        showToastMsg("Gambar karya berhasil di-crop & diunggah!", "success");
       } else if (cropperTarget === "brand") {
         setBrandForm((prev) => ({
           ...prev,
           coverImage: uploadResult.url,
         }));
+        showToastMsg("Gambar banner berhasil di-crop & diunggah!", "success");
       } else if (cropperTarget === "settingCamera") {
-        setSettings((prev) => ({
-          ...prev,
+        const updatedSettings = {
+          ...settings,
           camera_image_url: uploadResult.url,
-        }));
+        };
+        setSettings(updatedSettings);
+        await saveSettingsToBackend(updatedSettings);
       } else if (cropperTarget === "settingAbout") {
-        setSettings((prev) => ({
-          ...prev,
+        const updatedSettings = {
+          ...settings,
           about_image_url: uploadResult.url,
-        }));
+        };
+        setSettings(updatedSettings);
+        await saveSettingsToBackend(updatedSettings);
       }
 
-      showToastMsg("Gambar baru berhasil di-crop & diunggah!", "success");
       setCropperSrc(null);
       setModalMode("form");
-      if (cropperTarget === "settingCamera" || cropperTarget === "settingAbout") {
-        setShowPhotoModal(false);
-      }
     } catch (err: any) {
       showToastMsg(err.message || "Gagal memproses crop gambar", "error");
     }
@@ -379,34 +414,7 @@ export default function AdminDashboardPage() {
   // Save Site Settings
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const res = await fetch("/api/admin/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyName: settings.company_name,
-          tagline: settings.tagline,
-          aboutText: settings.about_text,
-          whatsappNumber: settings.whatsapp_number,
-          defaultWhatsappMessage: settings.default_whatsapp_message,
-          address: settings.address,
-          email: settings.email,
-          instagramUrl: settings.instagram_url,
-          youtubeUrl: settings.youtube_url,
-          cameraImageUrl: settings.camera_image_url,
-          aboutImageUrl: settings.about_image_url,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Gagal menyimpan pengaturan");
-
-      showToastMsg("Pengaturan website & gambar About berhasil disimpan!", "success");
-      fetchData();
-      router.refresh();
-    } catch (err: any) {
-      showToastMsg(err.message || "Terjadi kesalahan", "error");
-    }
+    await saveSettingsToBackend(settings);
   };
 
   // Delete Photo Record
@@ -946,56 +954,58 @@ export default function AdminDashboardPage() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Gambar Kiri (Kamera/Kamera Lens) */}
+                {/* Gambar Kiri (Kamera Studio) */}
                 <div className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
                   <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider block">
                     1. Gambar Kiri (Kamera Studio)
                   </span>
 
-                  {settings.camera_image_url && (
-                    <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto">
-                      <img
-                        src={settings.camera_image_url}
-                        alt="Camera preview"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
+                  <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto">
+                    <img
+                      src={
+                        settings.camera_image_url ||
+                        "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop"
+                      }
+                      alt="Camera preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
 
                   <label className="cursor-pointer px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-2 transition-all">
                     <Crop className="w-4 h-4 text-[#C9A961]" />
                     <span>Pilih & Crop Gambar Kiri</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp,image/avif"
                       onChange={(e) => handleSelectFile(e, "settingCamera")}
                       className="hidden"
                     />
                   </label>
                 </div>
 
-                {/* Gambar Kanan (Fotografer Landscape) */}
+                {/* Gambar Kanan (Fine Art Landscape) */}
                 <div className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
                   <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider block">
                     2. Gambar Kanan (Fine Art Landscape)
                   </span>
 
-                  {settings.about_image_url && (
-                    <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto">
-                      <img
-                        src={settings.about_image_url}
-                        alt="About preview"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
+                  <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto">
+                    <img
+                      src={
+                        settings.about_image_url ||
+                        "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=800&auto=format&fit=crop"
+                      }
+                      alt="About preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
 
                   <label className="cursor-pointer px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-2 transition-all">
                     <Crop className="w-4 h-4 text-[#C9A961]" />
                     <span>Pilih & Crop Gambar Kanan</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept="image/jpeg,image/png,image/webp,image/avif"
                       onChange={(e) => handleSelectFile(e, "settingAbout")}
                       className="hidden"
                     />
@@ -1057,8 +1067,22 @@ export default function AdminDashboardPage() {
         )}
       </div>
 
-      {/* SINGLE UNIFIED MODAL FOR PHOTO / CROP / BRAND COVER / PACKAGE */}
-      {(showPhotoModal || showBrandModal || showPackageModal) && (
+      {/* STANDALONE CROPPER MODAL OVERLAY */}
+      {modalMode === "crop" && cropperSrc && (
+        <ImageCropperModal
+          imageSrc={cropperSrc}
+          initialAspectRatio={cropRatio}
+          lockAspectRatio={cropperTarget === "brand" || cropperTarget === "settingCamera" || cropperTarget === "settingAbout"}
+          onCropComplete={handleCropComplete}
+          onCancel={() => {
+            setCropperSrc(null);
+            setModalMode("form");
+          }}
+        />
+      )}
+
+      {/* SINGLE UNIFIED MODAL FOR PHOTO / BRAND COVER / PACKAGE */}
+      {modalMode === "form" && (showPhotoModal || showBrandModal || showPackageModal) && (
         <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -1070,9 +1094,7 @@ export default function AdminDashboardPage() {
             <div className="p-5 border-b border-neutral-800 shrink-0 flex items-center justify-between bg-neutral-900">
               <div>
                 <h3 className="font-serif-heading text-xl font-bold text-white">
-                  {modalMode === "crop"
-                    ? "Editor Potong Gambar (Crop)"
-                    : showPackageModal
+                  {showPackageModal
                     ? editingPackage
                       ? "Edit Paket Harga"
                       : "Tambah Paket Harga Baru"
@@ -1083,9 +1105,7 @@ export default function AdminDashboardPage() {
                     : "Upload Foto Karya Baru"}
                 </h3>
                 <p className="text-xs text-neutral-400 font-light">
-                  {modalMode === "crop"
-                    ? "Sesuaikan proporsi foto lalu klik Terapkan Crop."
-                    : showPackageModal
+                  {showPackageModal
                     ? "Isi detail nama paket, harga, benefit, dan kategori sub-brand."
                     : "Pilih file gambar baru untuk dipotong (crop) dan diunggah."}
                 </p>
@@ -1093,36 +1113,14 @@ export default function AdminDashboardPage() {
 
               <button
                 onClick={() => {
-                  if (modalMode === "crop") {
-                    setModalMode("form");
-                  } else {
-                    setShowPhotoModal(false);
-                    setShowBrandModal(false);
-                    setShowPackageModal(false);
-                  }
+                  setShowPhotoModal(false);
+                  setShowBrandModal(false);
+                  setShowPackageModal(false);
                 }}
                 className="p-2 rounded-full bg-neutral-800 text-neutral-400 hover:text-white transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
-              
-              {/* MODE 1: CROPPER MODAL VIEW */}
-              {modalMode === "crop" && cropperSrc && (
-                <ImageCropperModal
-                  imageSrc={cropperSrc}
-                  initialAspectRatio={cropRatio}
-                  lockAspectRatio={cropperTarget === "brand"}
-                  onCropComplete={handleCropComplete}
-                  onCancel={() => {
-                    setCropperSrc(null);
-                    if (cropperTarget === "settingCamera" || cropperTarget === "settingAbout") {
-                      setShowPhotoModal(false);
-                    } else {
-                      setModalMode("form");
-                    }
-                  }}
-                />
-              )}
             </div>
 
             {/* MODE 2A: BRAND COVER EDIT FORM */}
