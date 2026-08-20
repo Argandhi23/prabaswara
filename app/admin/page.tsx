@@ -94,6 +94,10 @@ export default function AdminDashboardPage() {
   const [cropperSrc, setCropperSrc] = useState<string | null>(null);
   const [cropRatio, setCropRatio] = useState<CropRatioType>("portrait");
 
+  // File Input Refs for direct click invocation
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const aboutInputRef = useRef<HTMLInputElement>(null);
+
   // Photo Form State
   const [photoForm, setPhotoForm] = useState({
     title: "",
@@ -955,12 +959,20 @@ export default function AdminDashboardPage() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* Gambar Kiri (Kamera Studio) */}
-                <div className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
-                  <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider block">
-                    1. Gambar Kiri (Kamera Studio)
-                  </span>
+                <div
+                  onClick={() => cameraInputRef.current?.click()}
+                  className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3 cursor-pointer group hover:border-[#C9A961]/60 transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider">
+                      1. Gambar Kiri (Kamera Studio)
+                    </span>
+                    <span className="text-[10px] text-neutral-400 group-hover:text-[#C9A961] transition-colors font-medium">
+                      Klik gambar/tombol untuk ganti
+                    </span>
+                  </div>
 
-                  <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto">
+                  <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto group-hover:scale-[1.01] transition-transform">
                     <img
                       src={
                         settings.camera_image_url ||
@@ -969,27 +981,48 @@ export default function AdminDashboardPage() {
                       alt="Camera preview"
                       className="w-full h-full object-cover"
                     />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-xs font-semibold text-white">
+                      <Crop className="w-5 h-5 text-[#C9A961]" />
+                      <span>Pilih & Crop Gambar Baru</span>
+                    </div>
                   </div>
 
-                  <label className="cursor-pointer px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-2 transition-all">
-                    <Crop className="w-4 h-4 text-[#C9A961]" />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      cameraInputRef.current?.click();
+                    }}
+                    className="w-full px-4 py-2.5 bg-neutral-900 group-hover:bg-[#C9A961] border border-neutral-700 group-hover:border-[#C9A961] rounded-xl text-xs font-semibold text-white group-hover:text-neutral-950 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Crop className="w-4 h-4 text-[#C9A961] group-hover:text-neutral-950" />
                     <span>Pilih & Crop Gambar Kiri</span>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/avif"
-                      onChange={(e) => handleSelectFile(e, "settingCamera")}
-                      className="hidden"
-                    />
-                  </label>
+                  </button>
+
+                  <input
+                    ref={cameraInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    onChange={(e) => handleSelectFile(e, "settingCamera")}
+                    className="hidden"
+                  />
                 </div>
 
                 {/* Gambar Kanan (Fine Art Landscape) */}
-                <div className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
-                  <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider block">
-                    2. Gambar Kanan (Fine Art Landscape)
-                  </span>
+                <div
+                  onClick={() => aboutInputRef.current?.click()}
+                  className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3 cursor-pointer group hover:border-[#C9A961]/60 transition-all"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider">
+                      2. Gambar Kanan (Fine Art Landscape)
+                    </span>
+                    <span className="text-[10px] text-neutral-400 group-hover:text-[#C9A961] transition-colors font-medium">
+                      Klik gambar/tombol untuk ganti
+                    </span>
+                  </div>
 
-                  <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto">
+                  <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto group-hover:scale-[1.01] transition-transform">
                     <img
                       src={
                         settings.about_image_url ||
@@ -998,18 +1031,31 @@ export default function AdminDashboardPage() {
                       alt="About preview"
                       className="w-full h-full object-cover"
                     />
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-xs font-semibold text-white">
+                      <Crop className="w-5 h-5 text-[#C9A961]" />
+                      <span>Pilih & Crop Gambar Baru</span>
+                    </div>
                   </div>
 
-                  <label className="cursor-pointer px-4 py-2.5 bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 rounded-xl text-xs font-semibold text-white flex items-center justify-center gap-2 transition-all">
-                    <Crop className="w-4 h-4 text-[#C9A961]" />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      aboutInputRef.current?.click();
+                    }}
+                    className="w-full px-4 py-2.5 bg-neutral-900 group-hover:bg-[#C9A961] border border-neutral-700 group-hover:border-[#C9A961] rounded-xl text-xs font-semibold text-white group-hover:text-neutral-950 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Crop className="w-4 h-4 text-[#C9A961] group-hover:text-neutral-950" />
                     <span>Pilih & Crop Gambar Kanan</span>
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp,image/avif"
-                      onChange={(e) => handleSelectFile(e, "settingAbout")}
-                      className="hidden"
-                    />
-                  </label>
+                  </button>
+
+                  <input
+                    ref={aboutInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/avif"
+                    onChange={(e) => handleSelectFile(e, "settingAbout")}
+                    className="hidden"
+                  />
                 </div>
               </div>
             </div>
