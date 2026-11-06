@@ -1,5 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <rect width="32" height="32" rx="8" fill="#171717"/>
-  <rect x="1" y="1" width="30" height="30" rx="7" fill="none" stroke="#404040" stroke-width="1"/>
-  <text x="16" y="22" font-family="system-ui, -apple-system, sans-serif" font-size="19" font-weight="700" fill="#FFFFFF" text-anchor="middle">P</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <rect width="256" height="256" rx="55" fill="#141414" />
+  <g transform="translate(128, 128) scale(1.0875) translate(-264.5, -202)">
+    <!-- Top P-Loop -->
+    <path d="M 185 117 L 276 117 A 69 69 0 0 1 296.5 251.9 L 267 227 L 276 227 A 41 41 0 0 0 276 145 L 185 145 Z" fill="#FFFFFF" />
+    <!-- Middle Trapezoid -->
+    <polygon points="226,172 283,172 283,200 256,200" fill="#FFFFFF" />
+    <!-- Diagonal White Bar -->
+    <polygon points="185,172 310,287 267,287 185,211" fill="#FFFFFF" />
+    <!-- Bottom-Left Gold Triangle -->
+    <polygon points="185,247 229,287 185,287" fill="#DCA958" />
+  </g>
 </svg>

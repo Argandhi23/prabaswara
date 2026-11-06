@@ -67,3 +67,37 @@ export interface PackageItem {
   created_at?: string;
 }
 
+export interface VisitorLog {
+  id: string;
+  visitor_id: string;
+  path: string;
+  page_title: string;
+  source: string;
+  referrer: string;
+  browser: string;
+  os: string;
+  device_type: "mobile" | "desktop" | "tablet";
+  location: string;
+  ip_masked: string;
+  visited_at: string;
+}
+
+export interface AnalyticsSummary {
+  counts: {
+    today: number;
+    week: number;
+    month: number;
+    year: number;
+    all: number;
+  };
+  uniqueCounts: {
+    today: number;
+    week: number;
+    month: number;
+    year: number;
+    all: number;
+  };
+  logs: VisitorLog[];
+}
+
+

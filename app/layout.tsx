@@ -4,6 +4,7 @@ import "./globals.css";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import FloatingWhatsApp from "@/components/common/FloatingWhatsApp";
+import VisitorTracker from "@/components/common/VisitorTracker";
 
 const spaceGrotesk = Space_Grotesk({
   subsets: ["latin"],
@@ -63,7 +64,12 @@ export const metadata: Metadata = {
     description: "Photography & Creative Visual Studio",
   },
   icons: {
-    icon: "/icon.svg",
+    icon: [
+      { url: "/icon.svg", type: "image/svg+xml" },
+      { url: "/icon.png", type: "image/png", sizes: "512x512" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/icon.png",
   },
 };
 
@@ -83,9 +89,10 @@ export default async function RootLayout({
       className={`${spaceGrotesk.variable} ${inter.variable} scroll-smooth`}
     >
       <body className="bg-[#FFFFFF] text-[#171717] min-h-screen flex flex-col font-sans-body selection:bg-[#171717] selection:text-[#FFFFFF]">
+        <VisitorTracker />
         <Navbar />
         <main className="flex-1">{children}</main>
-        <Footer />
+        <Footer settings={settings} />
         <FloatingWhatsApp number={settings.whatsappNumber} />
       </body>
     </html>

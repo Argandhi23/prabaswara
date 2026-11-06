@@ -1,35 +1,51 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
   Save,
-  Settings,
-  Grid,
   X,
   Crop,
-  Layers,
   CheckCircle,
-  Tag,
   Trash2,
   Edit3,
   Check,
   Sparkles,
+  Menu,
+  Users,
+  Grid,
+  Layers,
+  Tag,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { Photo, Brand, SiteSettings, PackageItem, AdminToast as ToastType } from "@/types";
-import AdminHeader from "@/components/admin/AdminHeader";
-import AdminGuideBanner from "@/components/admin/AdminGuideBanner";
+import {
+  Photo,
+  Brand,
+  SiteSettings,
+  PackageItem,
+  AdminToast as ToastType,
+  AnalyticsSummary,
+} from "@/types";
+import AdminSidebar, { AdminTabType } from "@/components/admin/AdminSidebar";
+import VisitorAnalyticsPanel from "@/components/admin/VisitorAnalyticsPanel";
 import PhotoCard from "@/components/admin/PhotoCard";
 import BrandCard from "@/components/admin/BrandCard";
 import AdminToast from "@/components/admin/AdminToast";
 import ImageCropperModal, { CropRatioType } from "@/components/admin/ImageCropperModal";
 import { formatRupiahInput } from "@/lib/formatters";
 
+const EMPTY_ANALYTICS: AnalyticsSummary = {
+  counts: { today: 0, week: 0, month: 0, year: 0, all: 0 },
+  uniqueCounts: { today: 0, week: 0, month: 0, year: 0, all: 0 },
+  logs: [],
+};
+
 export default function AdminDashboardPage() {
   const [authenticated, setAuthenticated] = useState<boolean | null>(null);
-  const [activeTab, setActiveTab] = useState<"photos" | "brands" | "packages" | "settings">("photos");
+  const [activeTab, setActiveTab] = useState<AdminTabType>("photos");
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
   const [locationFilter, setLocationFilter] = useState<string>("all");
   const [packageCategoryFilter, setPackageCategoryFilter] = useState<string>("all");
 
@@ -37,6 +53,8 @@ export default function AdminDashboardPage() {
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [packages, setPackages] = useState<PackageItem[]>([]);
+  const [analytics, setAnalytics] = useState<AnalyticsSummary>(EMPTY_ANALYTICS);
+  const [refreshingAnalytics, setRefreshingAnalytics] = useState(false);
   const [settings, setSettings] = useState<SiteSettings>({
     company_name: "Prabaswara",
     tagline: "Photography & Creative Visual Studio",
@@ -87,7 +105,9 @@ export default function AdminDashboardPage() {
   });
 
   // Cropper Target ("photo" | "brand" | "settingCamera" | "settingAbout")
-  const [cropperTarget, setCropperTarget] = useState<"photo" | "brand" | "settingCamera" | "settingAbout">("photo");
+  const [cropperTarget, setCropperTarget] = useState<
+    "photo" | "brand" | "settingCamera" | "settingAbout"
+  >("photo");
   const [modalMode, setModalMode] = useState<"form" | "crop">("form");
 
   // Cropper Controls State
@@ -117,7 +137,51 @@ export default function AdminDashboardPage() {
     setTimeout(() => setToast(null), 4500);
   };
 
-  // Auth check & data fetching
+  const fetchAnalyticsOnly = useCallback(async () => {
+    setRefreshingAnalytics(true);
+    try {
+      const res = await fetch("/api/admin/analytics");
+      const data = await res.json();
+      if (data.summary) setAnalytics(data.summary);
+    } catch (err) {
+      console.error("Error fetching analytics:", err);
+    } finally {
+      setRefreshingAnalytics(false);
+    }
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [resPhotos, resBrands, resPackages, resSettings, resAnalytics] = await Promise.all([
+        fetch("/api/admin/photos"),
+        fetch("/api/admin/brands"),
+        fetch("/api/admin/packages"),
+        fetch("/api/admin/settings"),
+        fetch("/api/admin/analytics"),
+      ]);
+      const [dataPhotos, dataBrands, dataPackages, dataSettings, dataAnalytics] =
+        await Promise.all([
+          resPhotos.json(),
+          resBrands.json(),
+          resPackages.json(),
+          resSettings.json(),
+          resAnalytics.json().catch(() => ({})),
+        ]);
+
+      if (dataPhotos.photos) setPhotos(dataPhotos.photos);
+      if (dataBrands.brands) setBrands(dataBrands.brands);
+      if (dataPackages.packages) setPackages(dataPackages.packages);
+      if (dataSettings.settings) setSettings(dataSettings.settings);
+      if (dataAnalytics.summary) setAnalytics(dataAnalytics.summary);
+    } catch (err) {
+      console.error("Error fetching data:", err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // Auth check & initial data fetching
   useEffect(() => {
     async function checkAuth() {
       try {
@@ -134,32 +198,14 @@ export default function AdminDashboardPage() {
       }
     }
     checkAuth();
-  }, [router]);
+  }, [router, fetchData]);
 
-  async function fetchData() {
-    setLoading(true);
-    try {
-      const [resPhotos, resBrands, resPackages, resSettings] = await Promise.all([
-        fetch("/api/admin/photos"),
-        fetch("/api/admin/brands"),
-        fetch("/api/admin/packages"),
-        fetch("/api/admin/settings"),
-      ]);
-      const dataPhotos = await resPhotos.json();
-      const dataBrands = await resBrands.json();
-      const dataPackages = await resPackages.json();
-      const dataSettings = await resSettings.json();
-
-      if (dataPhotos.photos) setPhotos(dataPhotos.photos);
-      if (dataBrands.brands) setBrands(dataBrands.brands);
-      if (dataPackages.packages) setPackages(dataPackages.packages);
-      if (dataSettings.settings) setSettings(dataSettings.settings);
-    } catch (err) {
-      console.error("Error fetching data:", err);
-    } finally {
-      setLoading(false);
+  // Auto-refresh analytics when switching to analytics tab
+  useEffect(() => {
+    if (authenticated && activeTab === "analytics") {
+      fetchAnalyticsOnly();
     }
-  }
+  }, [authenticated, activeTab, fetchAnalyticsOnly]);
 
   const handleLogout = async () => {
     await fetch("/api/admin/auth", { method: "DELETE" });
@@ -385,7 +431,9 @@ export default function AdminDashboardPage() {
       }
 
       showToastMsg(
-        editingPackage ? "Paket harga berhasil diperbarui!" : "Paket harga baru berhasil ditambahkan!",
+        editingPackage
+          ? "Paket harga berhasil diperbarui!"
+          : "Paket harga baru berhasil ditambahkan!",
         "success"
       );
       setShowPackageModal(false);
@@ -559,6 +607,30 @@ export default function AdminDashboardPage() {
     return pkg.brand_slug === packageCategoryFilter;
   });
 
+  const tabHeaderInfo: Record<AdminTabType, { title: string; subtitle: string }> = {
+    photos: {
+      title: "Galeri Foto Karya",
+      subtitle: "Tambah, edit, atau hapus foto portofolio untuk halaman utama & 4 sub-brand.",
+    },
+    brands: {
+      title: "Banner 4 Sub-Brand",
+      subtitle: "Atur gambar sampul (cover banner) untuk Swara Gallery, Studio, Moment, & Wedding.",
+    },
+    packages: {
+      title: "Paket Harga & Pricelist",
+      subtitle: "Kelola daftar paket, harga, dan poin fasilitas untuk masing-masing layanan.",
+    },
+    analytics: {
+      title: "Statistik Pengunjung Website",
+      subtitle:
+        "Pantau siapa yang mengunjungi website hari ini, minggu ini, bulan ini, tahun ini, serta asal kunjungannya (Instagram, Chrome, WhatsApp, dll).",
+    },
+    settings: {
+      title: "Pengaturan Gambar & Kontak",
+      subtitle: "Ubah gambar bagian Tentang Prabaswara serta nomor WhatsApp & email resmi.",
+    },
+  };
+
   if (authenticated === null || loading) {
     return (
       <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center font-sans-body">
@@ -572,545 +644,597 @@ export default function AdminDashboardPage() {
     );
   }
 
+  const currentHeader = tabHeaderInfo[activeTab];
+
   return (
-    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans-body">
+    <div className="min-h-screen bg-neutral-950 text-neutral-100 flex font-sans-body">
       {/* Toast Alert */}
       <AdminToast toast={toast} />
 
-      {/* Admin Header */}
-      <AdminHeader onLogout={handleLogout} />
+      {/* Left Sidebar Navigation */}
+      <AdminSidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        counts={{
+          todayVisitors: analytics.counts.today,
+          photos: photos.length,
+          brands: brands.length,
+          packages: packages.length,
+        }}
+        mobileOpen={mobileSidebarOpen}
+        setMobileOpen={setMobileSidebarOpen}
+        onLogout={handleLogout}
+      />
 
-      {/* Main Content Container */}
-      <div className="flex-1 max-w-7xl w-full mx-auto p-6 md:p-8 space-y-8">
-        {/* Guide Banner */}
-        <AdminGuideBanner />
+      {/* Right Content Area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Clean Top Bar */}
+        <header className="sticky top-0 z-30 bg-neutral-950/90 backdrop-blur-md border-b border-neutral-800 px-5 sm:px-8 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3 min-w-0">
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="lg:hidden p-2.5 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-200 hover:text-[#C9A961] cursor-pointer shrink-0"
+              aria-label="Buka menu navigasi"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
 
-        {/* Tab Navigation */}
-        <div className="flex flex-wrap gap-2 border-b border-neutral-800 pb-4">
-          <button
-            onClick={() => setActiveTab("photos")}
-            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === "photos"
-                ? "bg-[#C9A961] text-neutral-950 shadow-md font-bold"
-                : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-            }`}
-          >
-            <Grid className="w-4 h-4" />
-            <span>1. Kelola Galeri Foto Karya ({photos.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("brands")}
-            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === "brands"
-                ? "bg-[#C9A961] text-neutral-950 shadow-md font-bold"
-                : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-            }`}
-          >
-            <Layers className="w-4 h-4" />
-            <span>2. Kelola Banner 4 Sub-Brand ({brands.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("packages")}
-            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === "packages"
-                ? "bg-[#C9A961] text-neutral-950 shadow-md font-bold"
-                : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-            }`}
-          >
-            <Tag className="w-4 h-4" />
-            <span>3. Kelola Paket Harga & Pricelist ({packages.length})</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("settings")}
-            className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
-              activeTab === "settings"
-                ? "bg-[#C9A961] text-neutral-950 shadow-md font-bold"
-                : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            <span>4. Gambar About & Kontak WA</span>
-          </button>
-        </div>
-
-        {/* TAB 1: KELOLA FOTO GALERI */}
-        {activeTab === "photos" && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-neutral-900 p-6 rounded-2xl border border-neutral-800">
-              <div>
-                <h2 className="font-serif-heading text-xl font-bold text-white">
-                  Daftar Foto Portofolio
-                </h2>
-                <p className="text-xs text-neutral-400 font-light">
-                  Klik **Edit Foto & Caption** pada foto mana saja di bawah untuk mengganti gambarnya dengan file baru.
-                </p>
-              </div>
-
-              <button
-                onClick={openAddPhotoModal}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg active:scale-95 shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Tambah Foto Baru</span>
-              </button>
-            </div>
-
-            {/* Filter Buttons */}
-            <div className="flex flex-wrap items-center gap-2 pt-1 pb-2">
-              <span className="text-xs text-neutral-400 font-medium mr-2">Filter Berdasarkan Halaman:</span>
-              <button
-                onClick={() => setLocationFilter("all")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  locationFilter === "all"
-                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
-                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                Semua Foto ({photos.length})
-              </button>
-              <button
-                onClick={() => setLocationFilter("featured")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  locationFilter === "featured"
-                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
-                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                🌟 Homepage Featured ({photos.filter((p) => p.is_featured).length})
-              </button>
-              <button
-                onClick={() => setLocationFilter("swara-gallery")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  locationFilter === "swara-gallery"
-                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
-                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                🖼️ Swara Gallery ({photos.filter((p) => p.brand_slug === "swara-gallery").length})
-              </button>
-              <button
-                onClick={() => setLocationFilter("swara-studio")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  locationFilter === "swara-studio"
-                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
-                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                📸 Swara Studio ({photos.filter((p) => p.brand_slug === "swara-studio").length})
-              </button>
-              <button
-                onClick={() => setLocationFilter("swara-moment")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  locationFilter === "swara-moment"
-                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
-                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                📅 Swara Moment ({photos.filter((p) => p.brand_slug === "swara-moment").length})
-              </button>
-              <button
-                onClick={() => setLocationFilter("swara-wedding")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  locationFilter === "swara-wedding"
-                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
-                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                💍 Swara Wedding ({photos.filter((p) => p.brand_slug === "swara-wedding").length})
-              </button>
-            </div>
-
-            {/* Photos Grid */}
-            {filteredPhotos.length === 0 ? (
-              <div className="text-center py-20 bg-neutral-900/50 rounded-2xl border border-neutral-800/80 space-y-4">
-                <p className="text-sm text-neutral-400">Tidak ada foto untuk lokasi filter ini.</p>
-                <button
-                  onClick={openAddPhotoModal}
-                  className="px-4 py-2 bg-[#C9A961] text-neutral-950 text-xs font-bold rounded-xl uppercase tracking-wider hover:bg-[#B8964E] transition-all cursor-pointer"
-                >
-                  + Tambah Foto Baru
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredPhotos.map((photo) => (
-                  <PhotoCard
-                    key={photo.id}
-                    photo={photo}
-                    onEdit={openEditPhotoModal}
-                    onDelete={handleDeletePhoto}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 2: KELOLA COVER BANNER 4 SUB-BRAND */}
-        {activeTab === "brands" && (
-          <div className="space-y-6">
-            <div className="bg-neutral-900 p-6 rounded-2xl border border-neutral-800">
-              <h2 className="font-serif-heading text-xl font-bold text-white">
-                Gambar Cover Banner 4 Sub-Brand Prabaswara
-              </h2>
-              <p className="text-xs text-neutral-400 font-light mt-1">
-                Ganti gambar utama/banner untuk Swara Gallery, Swara Studio, Swara Moment, dan Swara Wedding. Gambar ini yang tampil di Hero Showcase dan Halaman Layanan!
+            <div className="min-w-0">
+              <h1 className="font-serif-heading text-lg sm:text-xl font-bold text-white truncate">
+                {currentHeader.title}
+              </h1>
+              <p className="text-xs text-neutral-400 font-light truncate hidden sm:block">
+                {currentHeader.subtitle}
               </p>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {brands.map((brand) => (
-                <BrandCard key={brand.id || brand.slug} brand={brand} onEdit={openEditBrandModal} />
-              ))}
-            </div>
           </div>
-        )}
 
-        {/* TAB 3: KELOLA PAKET HARGA & PRICELIST */}
-        {activeTab === "packages" && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-neutral-900 p-6 rounded-2xl border border-neutral-800">
-              <div>
-                <h2 className="font-serif-heading text-xl font-bold text-white">
-                  Kelola Pricelist & Paket Harga Sub-Brand
-                </h2>
-                <p className="text-xs text-neutral-400 font-light mt-1">
-                  Atur nama paket, daftar benefit/fasilitas, harga, label popularitas, dan kategori sub-brand. Perubahan akan langsung tampil di Beranda dan Halaman Kategori!
-                </p>
-              </div>
-
+          {/* Contextual Primary Action Button */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            {activeTab === "photos" && (
               <button
-                onClick={openAddPackageModal}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-lg active:scale-95 shrink-0"
+                onClick={openAddPhotoModal}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md active:scale-95"
               >
                 <Plus className="w-4 h-4" />
-                <span>Tambah Paket Baru</span>
+                <span>Tambah Foto</span>
               </button>
-            </div>
+            )}
 
-            {/* Filter Buttons for Packages */}
-            <div className="flex flex-wrap items-center gap-2 pt-1 pb-2">
-              <span className="text-xs text-neutral-400 font-medium mr-2">Filter Kategori Sub-Brand:</span>
+            {activeTab === "packages" && (
               <button
-                onClick={() => setPackageCategoryFilter("all")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  packageCategoryFilter === "all"
-                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
-                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
+                onClick={openAddPackageModal}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md active:scale-95"
               >
-                Semua Paket ({packages.length})
+                <Plus className="w-4 h-4" />
+                <span>Tambah Paket</span>
               </button>
-              <button
-                onClick={() => setPackageCategoryFilter("swara-gallery")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  packageCategoryFilter === "swara-gallery"
-                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
-                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                🖼️ Swara Gallery ({packages.filter((p) => p.brand_slug === "swara-gallery").length})
-              </button>
-              <button
-                onClick={() => setPackageCategoryFilter("swara-studio")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  packageCategoryFilter === "swara-studio"
-                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
-                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                📸 Swara Studio ({packages.filter((p) => p.brand_slug === "swara-studio").length})
-              </button>
-              <button
-                onClick={() => setPackageCategoryFilter("swara-moment")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  packageCategoryFilter === "swara-moment"
-                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
-                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                📅 Swara Moment ({packages.filter((p) => p.brand_slug === "swara-moment").length})
-              </button>
-              <button
-                onClick={() => setPackageCategoryFilter("swara-wedding")}
-                className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  packageCategoryFilter === "swara-wedding"
-                    ? "bg-[#C9A961]/20 text-[#C9A961] border border-[#C9A961]"
-                    : "bg-neutral-900 text-neutral-400 border border-neutral-800 hover:text-white"
-                }`}
-              >
-                💍 Swara Wedding ({packages.filter((p) => p.brand_slug === "swara-wedding").length})
-              </button>
-            </div>
+            )}
+          </div>
+        </header>
 
-            {/* Packages Grid */}
-            {filteredPackages.length === 0 ? (
-              <div className="text-center py-20 bg-neutral-900/50 rounded-2xl border border-neutral-800/80 space-y-4">
-                <p className="text-sm text-neutral-400">Belum ada paket harga untuk kategori ini.</p>
+        {/* Main Workspace Container */}
+        <main className="flex-1 p-5 sm:p-8 max-w-7xl w-full mx-auto space-y-6">
+          {/* Quick Overview Strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <button
+              onClick={() => setActiveTab("photos")}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
+                activeTab === "photos"
+                  ? "bg-neutral-900 border-[#C9A961]/70"
+                  : "bg-neutral-900/60 border-neutral-800/80 hover:border-neutral-700"
+              }`}
+            >
+              <div className="p-2.5 rounded-xl bg-neutral-950 text-[#C9A961] border border-neutral-800">
+                <Grid className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-[11px] text-neutral-400">Total Foto Karya</div>
+                <div className="text-base font-bold text-white">{photos.length} Foto</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("brands")}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
+                activeTab === "brands"
+                  ? "bg-neutral-900 border-[#C9A961]/70"
+                  : "bg-neutral-900/60 border-neutral-800/80 hover:border-neutral-700"
+              }`}
+            >
+              <div className="p-2.5 rounded-xl bg-neutral-950 text-[#C9A961] border border-neutral-800">
+                <Layers className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-[11px] text-neutral-400">Sub-Brand Aktif</div>
+                <div className="text-base font-bold text-white">{brands.length} Layanan</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("packages")}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
+                activeTab === "packages"
+                  ? "bg-neutral-900 border-[#C9A961]/70"
+                  : "bg-neutral-900/60 border-neutral-800/80 hover:border-neutral-700"
+              }`}
+            >
+              <div className="p-2.5 rounded-xl bg-neutral-950 text-[#C9A961] border border-neutral-800">
+                <Tag className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-[11px] text-neutral-400">Paket Pricelist</div>
+                <div className="text-base font-bold text-white">{packages.length} Paket</div>
+              </div>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("analytics")}
+              className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
+                activeTab === "analytics"
+                  ? "bg-neutral-900 border-[#C9A961]/70"
+                  : "bg-neutral-900/60 border-neutral-800/80 hover:border-neutral-700"
+              }`}
+            >
+              <div className="p-2.5 rounded-xl bg-neutral-950 text-[#C9A961] border border-neutral-800">
+                <Users className="w-4 h-4" />
+              </div>
+              <div>
+                <div className="text-[11px] text-neutral-400">Pengunjung Hari Ini</div>
+                <div className="text-base font-bold text-[#C9A961]">
+                  {analytics.counts.today} Kunjungan
+                </div>
+              </div>
+            </button>
+          </div>
+
+          {/* TAB: STATISTIK PENGUNJUNG */}
+          {activeTab === "analytics" && (
+            <VisitorAnalyticsPanel
+              summary={analytics}
+              onRefresh={fetchAnalyticsOnly}
+              refreshing={refreshingAnalytics}
+            />
+          )}
+
+          {/* TAB 1: KELOLA FOTO GALERI */}
+          {activeTab === "photos" && (
+            <div className="space-y-5">
+              {/* Filter Buttons */}
+              <div className="bg-neutral-900 p-4 rounded-2xl border border-neutral-800 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-neutral-400 font-medium mr-1">Filter Kategori:</span>
                 <button
-                  onClick={openAddPackageModal}
-                  className="px-4 py-2 bg-[#C9A961] text-neutral-950 text-xs font-bold rounded-xl uppercase tracking-wider hover:bg-[#B8964E] transition-all cursor-pointer"
+                  onClick={() => setLocationFilter("all")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    locationFilter === "all"
+                      ? "bg-[#C9A961] text-neutral-950 font-bold"
+                      : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                  }`}
                 >
-                  + Tambah Paket Baru
+                  Semua ({photos.length})
+                </button>
+                <button
+                  onClick={() => setLocationFilter("featured")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    locationFilter === "featured"
+                      ? "bg-[#C9A961] text-neutral-950 font-bold"
+                      : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                  }`}
+                >
+                  Homepage ({photos.filter((p) => p.is_featured).length})
+                </button>
+                <button
+                  onClick={() => setLocationFilter("swara-gallery")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    locationFilter === "swara-gallery"
+                      ? "bg-[#C9A961] text-neutral-950 font-bold"
+                      : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                  }`}
+                >
+                  Swara Gallery ({photos.filter((p) => p.brand_slug === "swara-gallery").length})
+                </button>
+                <button
+                  onClick={() => setLocationFilter("swara-studio")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    locationFilter === "swara-studio"
+                      ? "bg-[#C9A961] text-neutral-950 font-bold"
+                      : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                  }`}
+                >
+                  Swara Studio ({photos.filter((p) => p.brand_slug === "swara-studio").length})
+                </button>
+                <button
+                  onClick={() => setLocationFilter("swara-moment")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    locationFilter === "swara-moment"
+                      ? "bg-[#C9A961] text-neutral-950 font-bold"
+                      : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                  }`}
+                >
+                  Swara Moment ({photos.filter((p) => p.brand_slug === "swara-moment").length})
+                </button>
+                <button
+                  onClick={() => setLocationFilter("swara-wedding")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    locationFilter === "swara-wedding"
+                      ? "bg-[#C9A961] text-neutral-950 font-bold"
+                      : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                  }`}
+                >
+                  Swara Wedding ({photos.filter((p) => p.brand_slug === "swara-wedding").length})
                 </button>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {filteredPackages.map((pkg) => (
-                  <div
-                    key={pkg.id}
-                    className={`relative flex flex-col justify-between rounded-2xl p-6 bg-neutral-900 border transition-all ${
-                      pkg.is_popular ? "border-[#C9A961] shadow-lg shadow-[#C9A961]/10" : "border-neutral-800"
-                    }`}
+
+              {/* Photos Grid */}
+              {filteredPhotos.length === 0 ? (
+                <div className="text-center py-20 bg-neutral-900/50 rounded-2xl border border-neutral-800/80 space-y-4">
+                  <p className="text-sm text-neutral-400">Tidak ada foto untuk kategori ini.</p>
+                  <button
+                    onClick={openAddPhotoModal}
+                    className="px-4 py-2 bg-[#C9A961] text-neutral-950 text-xs font-bold rounded-xl uppercase tracking-wider hover:bg-[#B8964E] transition-all cursor-pointer"
                   >
-                    {pkg.is_popular && (
-                      <div className="absolute -top-3 right-4 px-3 py-1 rounded-full bg-[#C9A961] text-neutral-950 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" />
-                        <span>{pkg.popular_label || "POPULER"}</span>
-                      </div>
-                    )}
+                    + Tambah Foto Baru
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {filteredPhotos.map((photo) => (
+                    <PhotoCard
+                      key={photo.id}
+                      photo={photo}
+                      onEdit={openEditPhotoModal}
+                      onDelete={handleDeletePhoto}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-                    <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-[#C9A961]/15 text-[#C9A961] border border-[#C9A961]/30">
-                          {brandNamesMap[pkg.brand_slug] || pkg.brand_slug}
-                        </span>
-                        <span className="text-[10px] text-neutral-500 font-mono">
-                          Urutan: {pkg.display_order || 0}
-                        </span>
-                      </div>
+          {/* TAB 2: KELOLA COVER BANNER 4 SUB-BRAND */}
+          {activeTab === "brands" && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {brands.map((brand) => (
+                <BrandCard
+                  key={brand.id || brand.slug}
+                  brand={brand}
+                  onEdit={openEditBrandModal}
+                />
+              ))}
+            </div>
+          )}
 
-                      <div>
-                        <h3 className="font-serif-heading text-lg font-bold text-white">
-                          {pkg.name}
-                        </h3>
-                        <p className="text-xs text-neutral-400 mt-1 line-clamp-2 min-h-[32px]">
-                          {pkg.description}
-                        </p>
-                      </div>
+          {/* TAB 3: KELOLA PAKET HARGA & PRICELIST */}
+          {activeTab === "packages" && (
+            <div className="space-y-5">
+              {/* Filter Buttons for Packages */}
+              <div className="bg-neutral-900 p-4 rounded-2xl border border-neutral-800 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-neutral-400 font-medium mr-1">Filter Sub-Brand:</span>
+                <button
+                  onClick={() => setPackageCategoryFilter("all")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    packageCategoryFilter === "all"
+                      ? "bg-[#C9A961] text-neutral-950 font-bold"
+                      : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                  }`}
+                >
+                  Semua Paket ({packages.length})
+                </button>
+                <button
+                  onClick={() => setPackageCategoryFilter("swara-gallery")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    packageCategoryFilter === "swara-gallery"
+                      ? "bg-[#C9A961] text-neutral-950 font-bold"
+                      : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                  }`}
+                >
+                  Swara Gallery ({packages.filter((p) => p.brand_slug === "swara-gallery").length})
+                </button>
+                <button
+                  onClick={() => setPackageCategoryFilter("swara-studio")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    packageCategoryFilter === "swara-studio"
+                      ? "bg-[#C9A961] text-neutral-950 font-bold"
+                      : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                  }`}
+                >
+                  Swara Studio ({packages.filter((p) => p.brand_slug === "swara-studio").length})
+                </button>
+                <button
+                  onClick={() => setPackageCategoryFilter("swara-moment")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    packageCategoryFilter === "swara-moment"
+                      ? "bg-[#C9A961] text-neutral-950 font-bold"
+                      : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                  }`}
+                >
+                  Swara Moment ({packages.filter((p) => p.brand_slug === "swara-moment").length})
+                </button>
+                <button
+                  onClick={() => setPackageCategoryFilter("swara-wedding")}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                    packageCategoryFilter === "swara-wedding"
+                      ? "bg-[#C9A961] text-neutral-950 font-bold"
+                      : "bg-neutral-950 text-neutral-400 border border-neutral-800 hover:text-white"
+                  }`}
+                >
+                  Swara Wedding ({packages.filter((p) => p.brand_slug === "swara-wedding").length})
+                </button>
+              </div>
 
-                      <div className="pt-2 border-t border-neutral-800 flex items-baseline gap-1">
-                        <span className="font-serif-heading text-2xl font-bold text-[#C9A961]">
-                          {pkg.price}
-                        </span>
-                        {pkg.period && (
-                          <span className="text-xs text-neutral-400">{pkg.period}</span>
+              {/* Packages Grid */}
+              {filteredPackages.length === 0 ? (
+                <div className="text-center py-20 bg-neutral-900/50 rounded-2xl border border-neutral-800/80 space-y-4">
+                  <p className="text-sm text-neutral-400">Belum ada paket harga untuk kategori ini.</p>
+                  <button
+                    onClick={openAddPackageModal}
+                    className="px-4 py-2 bg-[#C9A961] text-neutral-950 text-xs font-bold rounded-xl uppercase tracking-wider hover:bg-[#B8964E] transition-all cursor-pointer"
+                  >
+                    + Tambah Paket Baru
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {filteredPackages.map((pkg) => (
+                    <div
+                      key={pkg.id}
+                      className={`relative flex flex-col justify-between rounded-2xl p-6 bg-neutral-900 border transition-all ${
+                        pkg.is_popular
+                          ? "border-[#C9A961] shadow-lg shadow-[#C9A961]/10"
+                          : "border-neutral-800"
+                      }`}
+                    >
+                      {pkg.is_popular && (
+                        <div className="absolute -top-3 right-4 px-3 py-1 rounded-full bg-[#C9A961] text-neutral-950 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" />
+                          <span>{pkg.popular_label || "POPULER"}</span>
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-[#C9A961]/15 text-[#C9A961] border border-[#C9A961]/30">
+                            {brandNamesMap[pkg.brand_slug] || pkg.brand_slug}
+                          </span>
+                          <span className="text-[10px] text-neutral-500 font-mono">
+                            Urutan: {pkg.display_order || 0}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h3 className="font-serif-heading text-lg font-bold text-white">
+                            {pkg.name}
+                          </h3>
+                          <p className="text-xs text-neutral-400 mt-1 line-clamp-2 min-h-[32px]">
+                            {pkg.description}
+                          </p>
+                        </div>
+
+                        <div className="pt-2 border-t border-neutral-800 flex items-baseline gap-1">
+                          <span className="font-serif-heading text-2xl font-bold text-[#C9A961]">
+                            {pkg.price}
+                          </span>
+                          {pkg.period && (
+                            <span className="text-xs text-neutral-400">{pkg.period}</span>
+                          )}
+                        </div>
+
+                        {/* Benefits list */}
+                        {pkg.features && pkg.features.length > 0 && (
+                          <div className="space-y-2 pt-2 border-t border-neutral-800/80">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 block">
+                              Daftar Benefit ({pkg.features.length}):
+                            </span>
+                            <ul className="space-y-1.5 max-h-[140px] overflow-y-auto custom-scrollbar pr-1">
+                              {pkg.features.map((feat, idx) => (
+                                <li
+                                  key={idx}
+                                  className="flex items-start gap-2 text-xs text-neutral-300"
+                                >
+                                  <Check className="w-3.5 h-3.5 text-[#C9A961] shrink-0 mt-0.5" />
+                                  <span className="line-clamp-2">{feat}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
                         )}
                       </div>
 
-                      {/* Benefits list */}
-                      {pkg.features && pkg.features.length > 0 && (
-                        <div className="space-y-2 pt-2 border-t border-neutral-800/80">
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-neutral-400 block">
-                            Daftar Benefit ({pkg.features.length}):
-                          </span>
-                          <ul className="space-y-1.5 max-h-[140px] overflow-y-auto custom-scrollbar pr-1">
-                            {pkg.features.map((feat, idx) => (
-                              <li key={idx} className="flex items-start gap-2 text-xs text-neutral-300">
-                                <Check className="w-3.5 h-3.5 text-[#C9A961] shrink-0 mt-0.5" />
-                                <span className="line-clamp-2">{feat}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+                      {/* Card Actions */}
+                      <div className="pt-6 mt-4 border-t border-neutral-800 flex items-center gap-2">
+                        <button
+                          onClick={() => openEditPackageModal(pkg)}
+                          className="flex-1 py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-[#C9A961]" />
+                          <span>Edit Paket</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeletePackage(pkg.id)}
+                          className="py-2 px-3 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-300 text-xs font-semibold transition-all cursor-pointer border border-red-800/50"
+                          title="Hapus Paket"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-
-                    {/* Card Actions */}
-                    <div className="pt-6 mt-4 border-t border-neutral-800 flex items-center gap-2">
-                      <button
-                        onClick={() => openEditPackageModal(pkg)}
-                        className="flex-1 py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-semibold uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-                      >
-                        <Edit3 className="w-3.5 h-3.5 text-[#C9A961]" />
-                        <span>Edit Paket</span>
-                      </button>
-                      <button
-                        onClick={() => handleDeletePackage(pkg.id)}
-                        className="py-2 px-3 rounded-xl bg-red-950/60 hover:bg-red-900/80 text-red-300 text-xs font-semibold transition-all cursor-pointer border border-red-800/50"
-                        title="Hapus Paket"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* TAB 4: GAMBAR ABOUT & PENGATURAN KONTAK */}
-        {activeTab === "settings" && (
-          <form onSubmit={handleSaveSettings} className="space-y-8">
-            {/* Section A: Gambar Section About Prabaswara */}
-            <div className="bg-neutral-900 p-8 rounded-2xl border border-neutral-800 space-y-6">
-              <div>
-                <h2 className="font-serif-heading text-xl font-bold text-white">
-                  Gambar Section &quot;Tentang Prabaswara&quot; (Halaman Utama)
-                </h2>
-                <p className="text-xs text-neutral-400 font-light mt-1">
-                  Ubah 2 gambar yang tampil pada section Tentang Prabaswara di halaman utama di bawah hero.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Gambar Kiri (Kamera Studio) */}
-                <div
-                  onClick={() => cameraInputRef.current?.click()}
-                  className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3 cursor-pointer group hover:border-[#C9A961]/60 transition-all"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider">
-                      1. Gambar Kiri (Kamera Studio)
-                    </span>
-                    <span className="text-[10px] text-neutral-400 group-hover:text-[#C9A961] transition-colors font-medium">
-                      Klik gambar/tombol untuk ganti
-                    </span>
-                  </div>
-
-                  <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto group-hover:scale-[1.01] transition-transform">
-                    <img
-                      src={
-                        settings.camera_image_url ||
-                        "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop"
-                      }
-                      alt="Camera preview"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-xs font-semibold text-white">
-                      <Crop className="w-5 h-5 text-[#C9A961]" />
-                      <span>Pilih & Crop Gambar Baru</span>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      cameraInputRef.current?.click();
-                    }}
-                    className="w-full px-4 py-2.5 bg-neutral-900 group-hover:bg-[#C9A961] border border-neutral-700 group-hover:border-[#C9A961] rounded-xl text-xs font-semibold text-white group-hover:text-neutral-950 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <Crop className="w-4 h-4 text-[#C9A961] group-hover:text-neutral-950" />
-                    <span>Pilih & Crop Gambar Kiri</span>
-                  </button>
-
-                  <input
-                    ref={cameraInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/avif"
-                    onChange={(e) => handleSelectFile(e, "settingCamera")}
-                    className="hidden"
-                  />
+                  ))}
                 </div>
-
-                {/* Gambar Kanan (Fine Art Landscape) */}
-                <div
-                  onClick={() => aboutInputRef.current?.click()}
-                  className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3 cursor-pointer group hover:border-[#C9A961]/60 transition-all"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider">
-                      2. Gambar Kanan (Fine Art Landscape)
-                    </span>
-                    <span className="text-[10px] text-neutral-400 group-hover:text-[#C9A961] transition-colors font-medium">
-                      Klik gambar/tombol untuk ganti
-                    </span>
-                  </div>
-
-                  <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto group-hover:scale-[1.01] transition-transform">
-                    <img
-                      src={
-                        settings.about_image_url ||
-                        "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=800&auto=format&fit=crop"
-                      }
-                      alt="About preview"
-                      className="w-full h-full object-cover"
-                    />
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-xs font-semibold text-white">
-                      <Crop className="w-5 h-5 text-[#C9A961]" />
-                      <span>Pilih & Crop Gambar Baru</span>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      aboutInputRef.current?.click();
-                    }}
-                    className="w-full px-4 py-2.5 bg-neutral-900 group-hover:bg-[#C9A961] border border-neutral-700 group-hover:border-[#C9A961] rounded-xl text-xs font-semibold text-white group-hover:text-neutral-950 flex items-center justify-center gap-2 transition-all cursor-pointer"
-                  >
-                    <Crop className="w-4 h-4 text-[#C9A961] group-hover:text-neutral-950" />
-                    <span>Pilih & Crop Gambar Kanan</span>
-                  </button>
-
-                  <input
-                    ref={aboutInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/avif"
-                    onChange={(e) => handleSelectFile(e, "settingAbout")}
-                    className="hidden"
-                  />
-                </div>
-              </div>
+              )}
             </div>
+          )}
 
-            {/* Section B: Nomor WA & Email */}
-            <div className="bg-neutral-900 p-8 rounded-2xl border border-neutral-800 space-y-6">
-              <div>
-                <h2 className="font-serif-heading text-xl font-bold text-white">
-                  Pengaturan Kontak & WhatsApp Utama
-                </h2>
-                <p className="text-xs text-neutral-400 font-light">
-                  Perbarui nomor WhatsApp utama dan email resmi studio Anda.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300">
-                    Nomor WhatsApp Utama
-                  </label>
-                  <input
-                    type="text"
-                    value={settings.whatsapp_number}
-                    onChange={(e) => setSettings({ ...settings, whatsapp_number: e.target.value })}
-                    placeholder="Format: 6281234567890"
-                    className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
-                  />
+          {/* TAB 4: GAMBAR ABOUT & PENGATURAN KONTAK */}
+          {activeTab === "settings" && (
+            <form onSubmit={handleSaveSettings} className="space-y-6">
+              {/* Section A: Gambar Section About Prabaswara */}
+              <div className="bg-neutral-900 p-6 sm:p-8 rounded-2xl border border-neutral-800 space-y-6">
+                <div>
+                  <h2 className="font-serif-heading text-lg font-bold text-white">
+                    Gambar Section &quot;Tentang Prabaswara&quot; (Halaman Utama)
+                  </h2>
+                  <p className="text-xs text-neutral-400 font-light mt-1">
+                    Klik pada masing-masing kartu di bawah untuk mengganti & memotong gambar.
+                  </p>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300">
-                    Email Resmi
-                  </label>
-                  <input
-                    type="email"
-                    value={settings.email}
-                    onChange={(e) => setSettings({ ...settings, email: e.target.value })}
-                    placeholder="hello@prabaswara.com"
-                    className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Gambar Kiri (Kamera Studio) */}
+                  <div
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3 cursor-pointer group hover:border-[#C9A961]/60 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider">
+                        1. Gambar Kiri (Kamera Studio)
+                      </span>
+                      <span className="text-[10px] text-neutral-400 group-hover:text-[#C9A961] transition-colors font-medium">
+                        Klik untuk ganti
+                      </span>
+                    </div>
+
+                    <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto group-hover:scale-[1.01] transition-transform">
+                      <img
+                        src={
+                          settings.camera_image_url ||
+                          "https://images.unsplash.com/photo-1516035069371-29a1b244cc32?q=80&w=800&auto=format&fit=crop"
+                        }
+                        alt="Camera preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-xs font-semibold text-white">
+                        <Crop className="w-5 h-5 text-[#C9A961]" />
+                        <span>Pilih & Crop Gambar Baru</span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        cameraInputRef.current?.click();
+                      }}
+                      className="w-full px-4 py-2.5 bg-neutral-900 group-hover:bg-[#C9A961] border border-neutral-700 group-hover:border-[#C9A961] rounded-xl text-xs font-semibold text-white group-hover:text-neutral-950 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                    >
+                      <Crop className="w-4 h-4 text-[#C9A961] group-hover:text-neutral-950" />
+                      <span>Pilih & Crop Gambar Kiri</span>
+                    </button>
+
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/avif"
+                      onChange={(e) => handleSelectFile(e, "settingCamera")}
+                      className="hidden"
+                    />
+                  </div>
+
+                  {/* Gambar Kanan (Fine Art Landscape) */}
+                  <div
+                    onClick={() => aboutInputRef.current?.click()}
+                    className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3 cursor-pointer group hover:border-[#C9A961]/60 transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-[#C9A961] uppercase tracking-wider">
+                        2. Gambar Kanan (Fine Art Landscape)
+                      </span>
+                      <span className="text-[10px] text-neutral-400 group-hover:text-[#C9A961] transition-colors font-medium">
+                        Klik untuk ganti
+                      </span>
+                    </div>
+
+                    <div className="relative aspect-[3/4] max-h-[220px] rounded-xl overflow-hidden border border-neutral-800 mx-auto group-hover:scale-[1.01] transition-transform">
+                      <img
+                        src={
+                          settings.about_image_url ||
+                          "https://images.unsplash.com/photo-1492691527719-9d1e07e534b4?q=80&w=800&auto=format&fit=crop"
+                        }
+                        alt="About preview"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1.5 text-xs font-semibold text-white">
+                        <Crop className="w-5 h-5 text-[#C9A961]" />
+                        <span>Pilih & Crop Gambar Baru</span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        aboutInputRef.current?.click();
+                      }}
+                      className="w-full px-4 py-2.5 bg-neutral-900 group-hover:bg-[#C9A961] border border-neutral-700 group-hover:border-[#C9A961] rounded-xl text-xs font-semibold text-white group-hover:text-neutral-950 flex items-center justify-center gap-2 transition-all cursor-pointer"
+                    >
+                      <Crop className="w-4 h-4 text-[#C9A961] group-hover:text-neutral-950" />
+                      <span>Pilih & Crop Gambar Kanan</span>
+                    </button>
+
+                    <input
+                      ref={aboutInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/avif"
+                      onChange={(e) => handleSelectFile(e, "settingAbout")}
+                      className="hidden"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="pt-4 flex justify-end">
-                <button
-                  type="submit"
-                  className="px-8 py-3.5 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all cursor-pointer"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>Simpan Seluruh Pengaturan Website</span>
-                </button>
+              {/* Section B: Nomor WA & Email */}
+              <div className="bg-neutral-900 p-6 sm:p-8 rounded-2xl border border-neutral-800 space-y-6">
+                <div>
+                  <h2 className="font-serif-heading text-lg font-bold text-white">
+                    Pengaturan Kontak & WhatsApp Utama
+                  </h2>
+                  <p className="text-xs text-neutral-400 font-light">
+                    Perbarui nomor WhatsApp utama dan email resmi studio Anda.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block">
+                      Nomor WhatsApp Utama
+                    </label>
+                    <input
+                      type="text"
+                      value={settings.whatsapp_number}
+                      onChange={(e) =>
+                        setSettings({ ...settings, whatsapp_number: e.target.value })
+                      }
+                      placeholder="Format: 6281234567890"
+                      className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block">
+                      Email Resmi
+                    </label>
+                    <input
+                      type="email"
+                      value={settings.email}
+                      onChange={(e) => setSettings({ ...settings, email: e.target.value })}
+                      placeholder="hello@prabaswara.com"
+                      className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="submit"
+                    className="px-7 py-3 rounded-xl bg-[#C9A961] hover:bg-[#B8964E] text-neutral-950 font-bold text-xs uppercase tracking-wider shadow-lg flex items-center gap-2 transition-all cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>Simpan Pengaturan Website</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          </form>
-        )}
+            </form>
+          )}
+        </main>
       </div>
 
       {/* STANDALONE CROPPER MODAL OVERLAY */}
@@ -1118,7 +1242,11 @@ export default function AdminDashboardPage() {
         <ImageCropperModal
           imageSrc={cropperSrc}
           initialAspectRatio={cropRatio}
-          lockAspectRatio={cropperTarget === "brand" || cropperTarget === "settingCamera" || cropperTarget === "settingAbout"}
+          lockAspectRatio={
+            cropperTarget === "brand" ||
+            cropperTarget === "settingCamera" ||
+            cropperTarget === "settingAbout"
+          }
           onCropComplete={handleCropComplete}
           onCancel={() => {
             setCropperSrc(null);
@@ -1237,7 +1365,6 @@ export default function AdminDashboardPage() {
             {modalMode === "form" && showPhotoModal && (
               <form onSubmit={handleSavePhoto} className="flex-1 flex flex-col overflow-hidden">
                 <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
-                  {/* File Selector Button */}
                   <div className="space-y-3">
                     <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block">
                       Ganti / Upload File Gambar Foto *
@@ -1259,7 +1386,6 @@ export default function AdminDashboardPage() {
                       />
                     </label>
 
-                    {/* Image Preview Window */}
                     {photoForm.imageUrl && (
                       <div className="space-y-1.5 pt-2">
                         <span className="text-[11px] text-emerald-400 font-semibold flex items-center gap-1.5">
@@ -1339,11 +1465,19 @@ export default function AdminDashboardPage() {
                       type="checkbox"
                       id="isFeatured"
                       checked={photoForm.isFeatured}
-                      onChange={(e) => setPhotoForm({ ...photoForm, isFeatured: e.target.checked })}
+                      onChange={(e) =>
+                        setPhotoForm({ ...photoForm, isFeatured: e.target.checked })
+                      }
                       className="w-4 h-4 rounded border-neutral-700 accent-[#C9A961] cursor-pointer"
                     />
-                    <label htmlFor="isFeatured" className="text-xs text-neutral-300 cursor-pointer font-medium">
-                      Tampilkan foto ini di <span className="text-[#C9A961] font-bold">Halaman Utama (Homepage Featured)</span>
+                    <label
+                      htmlFor="isFeatured"
+                      className="text-xs text-neutral-300 cursor-pointer font-medium"
+                    >
+                      Tampilkan foto ini di{" "}
+                      <span className="text-[#C9A961] font-bold">
+                        Halaman Utama (Homepage Featured)
+                      </span>
                     </label>
                   </div>
                 </div>
@@ -1373,7 +1507,6 @@ export default function AdminDashboardPage() {
             {modalMode === "form" && showPackageModal && (
               <form onSubmit={handleSavePackage} className="flex-1 flex flex-col overflow-hidden">
                 <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 custom-scrollbar">
-                  {/* Category & Name */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
@@ -1381,7 +1514,9 @@ export default function AdminDashboardPage() {
                       </label>
                       <select
                         value={packageForm.brand_slug}
-                        onChange={(e) => setPackageForm({ ...packageForm, brand_slug: e.target.value })}
+                        onChange={(e) =>
+                          setPackageForm({ ...packageForm, brand_slug: e.target.value })
+                        }
                         className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
                       >
                         {categoryOptions.map((c) => (
@@ -1400,7 +1535,10 @@ export default function AdminDashboardPage() {
                         type="number"
                         value={packageForm.display_order}
                         onChange={(e) =>
-                          setPackageForm({ ...packageForm, display_order: Number(e.target.value) })
+                          setPackageForm({
+                            ...packageForm,
+                            display_order: Number(e.target.value),
+                          })
                         }
                         className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
                       />
@@ -1421,7 +1559,6 @@ export default function AdminDashboardPage() {
                     />
                   </div>
 
-                  {/* Price & Period */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
@@ -1456,7 +1593,6 @@ export default function AdminDashboardPage() {
                     </div>
                   </div>
 
-                  {/* Description */}
                   <div>
                     <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
                       Deskripsi Ringkas Paket
@@ -1464,7 +1600,9 @@ export default function AdminDashboardPage() {
                     <textarea
                       rows={2}
                       value={packageForm.description}
-                      onChange={(e) => setPackageForm({ ...packageForm, description: e.target.value })}
+                      onChange={(e) =>
+                        setPackageForm({ ...packageForm, description: e.target.value })
+                      }
                       placeholder="Penjelasan singkat mengenai paket harga ini..."
                       className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
                     />
@@ -1503,7 +1641,6 @@ export default function AdminDashboardPage() {
                       </ul>
                     )}
 
-                    {/* Add new feature input */}
                     <div className="flex items-center gap-2 pt-1">
                       <input
                         type="text"
@@ -1558,7 +1695,8 @@ export default function AdminDashboardPage() {
                         htmlFor="isPopularPkg"
                         className="text-xs text-neutral-200 cursor-pointer font-semibold"
                       >
-                        Tandai Sebagai <span className="text-[#C9A961]">Paket Populer / Rekomendasi</span>
+                        Tandai Sebagai{" "}
+                        <span className="text-[#C9A961]">Paket Populer / Rekomendasi</span>
                       </label>
                     </div>
 
@@ -1597,7 +1735,6 @@ export default function AdminDashboardPage() {
                   </div>
                 </div>
 
-                {/* Form Actions Footer */}
                 <div className="p-4 border-t border-neutral-800 shrink-0 bg-neutral-950/90 flex items-center justify-end gap-3 z-10">
                   <button
                     type="button"
