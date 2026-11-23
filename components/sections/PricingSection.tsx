@@ -4,7 +4,11 @@ import { useState } from "react";
 import { Check, ArrowUpRight, ShieldCheck, Tag } from "lucide-react";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
 import { PackageData } from "@/lib/mockData";
-import { normalizeOptionalPrice } from "@/lib/formatters";
+import {
+  calculateDiscountPercentage,
+  normalizeOptionalPrice,
+} from "@/lib/formatters";
+import DiscountSticker from "./DiscountSticker";
 
 interface PricingSectionProps {
   packages?: PackageData[];
@@ -94,6 +98,10 @@ export default function PricingSection({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
             {filteredPackages.map((pkg) => {
               const originalPrice = normalizeOptionalPrice(pkg.originalPrice);
+              const discountPercent = calculateDiscountPercentage(
+                originalPrice,
+                pkg.price
+              );
               const cardWaLink = generateWhatsAppLink({
                 number: whatsappNumber,
                 customMessage:
@@ -110,16 +118,24 @@ export default function PricingSection({
                       : "bg-white/90 border border-neutral-200/90 shadow-md hover:shadow-lg hover:border-neutral-300"
                   }`}
                 >
-                  {/* Subtle Badge */}
+                  {/* Subtle Popular Badge (Top Left) */}
                   {pkg.isPopular && (
                     <div className="absolute -top-3.5 left-8 px-4 py-1 rounded-full bg-[#161616] text-[#C9A961] text-[10px] font-medium uppercase tracking-[0.2em] shadow-sm border border-[#C9A961]/40">
                       {pkg.popularLabel || "REKOMENDASI"}
                     </div>
                   )}
 
+                  {/* Corner Starburst Discount Sticker (Top Right) */}
+                  {discountPercent !== null && (
+                    <DiscountSticker
+                      percentage={discountPercent}
+                      className="absolute -top-4 -right-3 sm:-top-5 sm:-right-4 z-20"
+                    />
+                  )}
+
                   <div className="space-y-6">
                     {/* Sub-brand tag & Title */}
-                    <div>
+                    <div className={discountPercent !== null ? "pr-12 sm:pr-14" : ""}>
                       <span className="inline-block px-3 py-1 rounded-full text-[10px] uppercase tracking-widest font-semibold bg-[#FAFAF8] text-[#8C6D2B] border border-[#C9A961]/30">
                         {pkg.brandTag || pkg.brandSlug}
                       </span>
