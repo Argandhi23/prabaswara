@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, ArrowUpRight, ShieldCheck, Tag } from "lucide-react";
 import { generateWhatsAppLink } from "@/lib/whatsapp";
 import { PackageData } from "@/lib/mockData";
+import { normalizeOptionalPrice } from "@/lib/formatters";
 
 interface PricingSectionProps {
   packages?: PackageData[];
@@ -92,6 +93,7 @@ export default function PricingSection({
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-stretch">
             {filteredPackages.map((pkg) => {
+              const originalPrice = normalizeOptionalPrice(pkg.originalPrice);
               const cardWaLink = generateWhatsAppLink({
                 number: whatsappNumber,
                 customMessage:
@@ -135,6 +137,11 @@ export default function PricingSection({
 
                     {/* Price display */}
                     <div className="pt-3 border-t border-neutral-100">
+                      {originalPrice && (
+                        <del className="block font-serif-heading text-sm sm:text-base font-medium text-neutral-400 line-through decoration-neutral-400/80 mb-0.5">
+                          {originalPrice}
+                        </del>
+                      )}
                       <div className="flex items-baseline gap-1.5 flex-wrap">
                         <span className="font-serif-heading text-3xl sm:text-4xl font-extrabold text-[#161616]">
                           {pkg.price}

@@ -81,6 +81,7 @@ export async function POST(req: NextRequest) {
         brand_slug: p.brandSlug,
         name: p.name,
         price: p.price,
+        original_price: p.originalPrice || null,
         period: p.period,
         description: p.description,
         features: p.features,
@@ -89,7 +90,22 @@ export async function POST(req: NextRequest) {
         wa_message: p.waMessage,
         display_order: p.order,
       }));
-      await supabase.from("packages").insert(packagesPayload);
+      const { error: pkgSeedError } = await supabase.from("packages").insert(packagesPayload);
+      if (pkgSeedError && pkgSeedError.message?.toLowerCase().includes("original_price")) {
+        const fallbackPayload = MOCK_PACKAGES.map((p) => ({
+          brand_slug: p.brandSlug,
+          name: p.name,
+          price: p.price,
+          period: p.period,
+          description: p.description,
+          features: p.features,
+          is_popular: p.isPopular,
+          popular_label: p.popularLabel,
+          wa_message: p.waMessage,
+          display_order: p.order,
+        }));
+        await supabase.from("packages").insert(fallbackPayload);
+      }
     }
 
     return NextResponse.json({ success: true, message: "Data sampel awal (termasuk paket harga) berhasil diimpor ke Supabase!" });
