@@ -346,6 +346,7 @@ export const MOCK_PACKAGES: PackageData[] = [
     brandTag: "Swara Studio",
     name: "Personal Portrait & Studio",
     price: "Rp 750.000",
+    originalPrice: "Rp 950.000",
     period: "/ sesi photo",
     description:
       "Cocok untuk foto personal portrait, wisuda, profil profesional, dan kebutuhan portofolio komersial.",
@@ -368,6 +369,7 @@ export const MOCK_PACKAGES: PackageData[] = [
     brandTag: "Swara Studio",
     name: "Commercial & Lookbook Studio",
     price: "Rp 2.250.000",
+    originalPrice: "Rp 2.750.000",
     period: "/ 4 jam sesi",
     description:
       "Penawaran ideal untuk brand fashion, lookbook produk, katalog bisnis, dan kebutuhan komersial.",
@@ -393,6 +395,7 @@ export const MOCK_PACKAGES: PackageData[] = [
     brandTag: "Swara Gallery",
     name: "Fine Art Print Limited Edition",
     price: "Rp 1.200.000",
+    originalPrice: "Rp 1.500.000",
     period: "/ cetakan karya",
     description:
       "Cetak foto seni berkualitas museum (archival fine art paper) untuk dekorasi interior hunian dan kantor.",
@@ -415,6 +418,7 @@ export const MOCK_PACKAGES: PackageData[] = [
     brandTag: "Swara Gallery",
     name: "Custom Visual Art & Licensing",
     price: "Rp 3.500.000",
+    originalPrice: "Rp 4.250.000",
     period: "/ lisensi proyek",
     description:
       "Layanan kurasi karya seni visual kustom dan lisensi penggunaan foto fine art untuk ruang komersial & publik.",
@@ -440,6 +444,7 @@ export const MOCK_PACKAGES: PackageData[] = [
     brandTag: "Swara Moment",
     name: "Intimate Birthday & Celebration",
     price: "Rp 1.850.000",
+    originalPrice: "Rp 2.300.000",
     period: "/ event & sesi",
     description:
       "Pilihan ideal untuk foto keluarga, grup, selebrasi ulang tahun, maternity, hingga acara intimate.",
@@ -463,6 +468,7 @@ export const MOCK_PACKAGES: PackageData[] = [
     brandTag: "Swara Moment",
     name: "Corporate Event & Gathering",
     price: "Rp 3.200.000",
+    originalPrice: "Rp 4.000.000",
     period: "/ event (5 jam)",
     description:
       "Dokumentasi profesional untuk acara gala dinner perusahaan, seminar, launching produk, dan gathering.",
@@ -487,6 +493,7 @@ export const MOCK_PACKAGES: PackageData[] = [
     brandTag: "Swara Wedding",
     name: "Intimate Wedding Essential",
     price: "Rp 4.500.000",
+    originalPrice: "Rp 5.500.000",
     period: "/ hari pernikahan",
     description:
       "Layanan lengkap dokumentasi foto & video pernikahan bergaya timeless, emosional, dan bernilai seni tinggi.",
@@ -509,6 +516,7 @@ export const MOCK_PACKAGES: PackageData[] = [
     brandTag: "Swara Wedding",
     name: "Grand Masterpiece Wedding",
     price: "Rp 8.500.000",
+    originalPrice: "Rp 10.500.000",
     period: "/ full wedding package",
     description:
       "Paket pernikahan paling komprehensif mencakup Akad/Holy Matrimony, Resepsi, album fisik eksklusif, dan teaser video.",

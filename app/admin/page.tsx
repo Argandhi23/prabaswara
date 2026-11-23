@@ -37,6 +37,7 @@ import {
   formatRupiahInput,
   formatOptionalRupiahInput,
   normalizeOptionalPrice,
+  calculateDiscountPercentage,
 } from "@/lib/formatters";
 
 const EMPTY_ANALYTICS: AnalyticsSummary = {
@@ -1026,9 +1027,22 @@ export default function AdminDashboardPage() {
 
                         <div className="pt-2 border-t border-neutral-800">
                           {normalizeOptionalPrice(pkg.original_price) && (
-                            <del className="block font-serif-heading text-xs font-medium text-neutral-500 line-through decoration-neutral-500/80 mb-0.5">
-                              {normalizeOptionalPrice(pkg.original_price)}
-                            </del>
+                            <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                              <del className="font-serif-heading text-xs font-medium text-neutral-500 line-through decoration-neutral-500/80">
+                                {normalizeOptionalPrice(pkg.original_price)}
+                              </del>
+                              {(() => {
+                                const discountPct = calculateDiscountPercentage(
+                                  pkg.original_price,
+                                  pkg.price
+                                );
+                                return discountPct !== null ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#C9A961]/15 text-[#C9A961] border border-[#C9A961]/30">
+                                    Diskon {discountPct}%
+                                  </span>
+                                ) : null;
+                              })()}
+                            </div>
                           )}
                           <div className="flex items-baseline gap-1 flex-wrap">
                             <span className="font-serif-heading text-2xl font-bold text-[#C9A961]">
@@ -1642,6 +1656,31 @@ export default function AdminDashboardPage() {
                       </p>
                     </div>
                   </div>
+
+                  {(() => {
+                    const modalDiscountPct = calculateDiscountPercentage(
+                      packageForm.original_price,
+                      packageForm.price
+                    );
+                    if (modalDiscountPct !== null) {
+                      return (
+                        <div className="px-3.5 py-2.5 rounded-xl bg-[#C9A961]/10 border border-[#C9A961]/30 text-xs text-neutral-200 flex items-center justify-between gap-2">
+                          <span>Stiker diskon otomatis di pojok card:</span>
+                          <span className="font-serif-heading font-bold text-[#C9A961]">
+                            SPECIAL {modalDiscountPct}% DISKON
+                          </span>
+                        </div>
+                      );
+                    }
+                    if (normalizeOptionalPrice(packageForm.original_price)) {
+                      return (
+                        <p className="text-[11px] text-amber-400/90">
+                          Harga coret harus lebih tinggi dari harga tampil agar stiker persen diskon muncul.
+                        </p>
+                      );
+                    }
+                    return null;
+                  })()}
 
                   <div>
                     <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
