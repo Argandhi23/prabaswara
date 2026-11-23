@@ -10,7 +10,11 @@ import {
   SiteSettingsData,
   TestimonialData,
 } from "@/lib/mockData";
-import { getPersistedPackages } from "@/lib/packageStore";
+import {
+  getFallbackOriginalPrices,
+  getPersistedPackages,
+  resolvePackageOriginalPrice,
+} from "@/lib/packageStore";
 import { getPersistedSiteSettings } from "@/lib/siteSettingsStore";
 
 /**
@@ -264,12 +268,18 @@ export async function getPackages(brandSlug?: string): Promise<PackageData[]> {
       "swara-wedding": "Swara Wedding",
     };
 
+    const hasOriginalPriceColumn = data.some((p) => "original_price" in p);
+    const fallbackOriginalPrices = hasOriginalPriceColumn
+      ? undefined
+      : await getFallbackOriginalPrices();
+
     return data.map((p) => ({
       _id: p.id,
       brandSlug: p.brand_slug,
       brandTag: brandMap[p.brand_slug] || p.brand_slug,
       name: p.name,
       price: p.price,
+      originalPrice: resolvePackageOriginalPrice(p, fallbackOriginalPrices),
       period: p.period || "",
       description: p.description || "",
       features: Array.isArray(p.features) ? p.features : [],

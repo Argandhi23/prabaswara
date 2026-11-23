@@ -283,6 +283,7 @@ CREATE TABLE IF NOT EXISTS public.packages (
   brand_slug TEXT NOT NULL,
   name TEXT NOT NULL,
   price TEXT NOT NULL,
+  original_price TEXT,
   period TEXT,
   description TEXT,
   features JSONB DEFAULT '[]'::jsonb,

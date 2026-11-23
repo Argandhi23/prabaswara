@@ -5,8 +5,38 @@ import {
   getPersistedPackages,
   savePersistedPackage,
   deletePersistedPackage,
+  getFallbackOriginalPrices,
+  saveFallbackOriginalPrice,
+  deleteFallbackOriginalPrice,
+  resolvePackageOriginalPrice,
+  normalizeOptionalPrice,
 } from "@/lib/packageStore";
 import { revalidatePath } from "next/cache";
+
+interface SupabasePackagePayload {
+  id?: string;
+  brand_slug: string;
+  name: string;
+  price: string;
+  original_price?: string | null;
+  period: string;
+  description: string;
+  features: string[];
+  is_popular: boolean;
+  popular_label: string;
+  wa_message: string;
+  display_order: number;
+}
+
+interface SupabasePackageRow extends SupabasePackagePayload {
+  id: string;
+  created_at?: string;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return "Terjadi kesalahan server.";
+}
 
 function revalidateAllPages() {
   try {
@@ -26,16 +56,86 @@ function isValidUUID(str?: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 }
 
+function isMissingOriginalPriceColumnError(
+  error: { code?: string; message?: string } | null
+): boolean {
+  if (!error) return false;
+  const msg = (error.message || "").toLowerCase();
+  return (
+    msg.includes("original_price") &&
+    (error.code === "PGRST204" ||
+      error.code === "42703" ||
+      msg.includes("schema cache") ||
+      msg.includes("does not exist") ||
+      msg.includes("column"))
+  );
+}
+
+async function upsertPackageInSupabase(
+  id: string,
+  payload: SupabasePackagePayload
+): Promise<{ row: SupabasePackageRow | null; missingOriginalPriceColumn: boolean }> {
+  // Step 1: If id is valid UUID, update by id
+  if (isValidUUID(id)) {
+    const res = await supabase
+      .from("packages")
+      .update(payload)
+      .eq("id", id)
+      .select();
+
+    if (isMissingOriginalPriceColumnError(res.error)) {
+      return { row: null, missingOriginalPriceColumn: true };
+    }
+    if (res.data && res.data.length > 0) {
+      return { row: res.data[0] as SupabasePackageRow, missingOriginalPriceColumn: false };
+    }
+  }
+
+  // Step 2: Fallback update by name & brand_slug if non-UUID or eq(id) returned 0 rows
+  const resName = await supabase
+    .from("packages")
+    .update(payload)
+    .eq("name", payload.name)
+    .eq("brand_slug", payload.brand_slug)
+    .select();
+
+  if (isMissingOriginalPriceColumnError(resName.error)) {
+    return { row: null, missingOriginalPriceColumn: true };
+  }
+  if (resName.data && resName.data.length > 0) {
+    return { row: resName.data[0] as SupabasePackageRow, missingOriginalPriceColumn: false };
+  }
+
+  // Step 3: Fallback insert if not found in Supabase
+  const insertPayload: SupabasePackagePayload = { ...payload };
+  if (isValidUUID(id)) insertPayload.id = id;
+
+  const resInsert = await supabase
+    .from("packages")
+    .insert([insertPayload])
+    .select();
+
+  if (isMissingOriginalPriceColumnError(resInsert.error)) {
+    return { row: null, missingOriginalPriceColumn: true };
+  }
+  if (resInsert.data && resInsert.data.length > 0) {
+    return { row: resInsert.data[0] as SupabasePackageRow, missingOriginalPriceColumn: false };
+  }
+
+  return { row: null, missingOriginalPriceColumn: false };
+}
+
 export async function GET() {
   try {
     const diskPackages = getPersistedPackages();
 
-    if (!isSupabaseConfigured) {
-      const formattedMock = diskPackages.map((p) => ({
-        id: p._id || (p as any).id,
+    const formatDiskPackages = () =>
+      diskPackages.map((p) => ({
+        id: p._id || p.id,
         brand_slug: p.brandSlug,
         name: p.name,
         price: p.price,
+        original_price: normalizeOptionalPrice(p.originalPrice),
         period: p.period,
         description: p.description,
         features: p.features,
@@ -44,7 +144,9 @@ export async function GET() {
         wa_message: p.waMessage,
         display_order: p.order,
       }));
-      return NextResponse.json({ packages: formattedMock });
+
+    if (!isSupabaseConfigured) {
+      return NextResponse.json({ packages: formatDiskPackages() });
     }
 
     const { data, error } = await supabase
@@ -53,28 +155,26 @@ export async function GET() {
       .order("display_order", { ascending: true });
 
     if (error || !data || data.length === 0) {
-      const formattedMock = diskPackages.map((p) => ({
-        id: p._id || (p as any).id,
-        brand_slug: p.brandSlug,
-        name: p.name,
-        price: p.price,
-        period: p.period,
-        description: p.description,
-        features: p.features,
-        is_popular: p.isPopular,
-        popular_label: p.popularLabel,
-        wa_message: p.waMessage,
-        display_order: p.order,
-      }));
-      return NextResponse.json({ packages: formattedMock });
+      return NextResponse.json({ packages: formatDiskPackages() });
     }
 
-    // Keep disk store synced with Supabase items
-    data.forEach((item) => savePersistedPackage(item));
+    const rows = data as SupabasePackageRow[];
+    const hasOriginalPriceColumn = rows.some((item) => "original_price" in item);
+    const fallbackOriginalPrices = hasOriginalPriceColumn
+      ? undefined
+      : await getFallbackOriginalPrices();
 
-    return NextResponse.json({ packages: data });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const enrichedPackages = rows.map((item) => ({
+      ...item,
+      original_price: resolvePackageOriginalPrice(item, fallbackOriginalPrices),
+    }));
+
+    // Keep disk store synced with Supabase items
+    enrichedPackages.forEach((item) => savePersistedPackage(item));
+
+    return NextResponse.json({ packages: enrichedPackages });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -88,6 +188,7 @@ export async function POST(req: NextRequest) {
       brand_slug,
       name,
       price,
+      original_price,
       period,
       description,
       features,
@@ -104,11 +205,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const normalizedOriginalPrice = normalizeOptionalPrice(original_price);
+
     const newPkg = {
       id: `pkg-${Date.now()}`,
       brand_slug: brand_slug.trim(),
       name: name.trim(),
       price: price.trim(),
+      original_price: normalizedOriginalPrice,
       period: period ? period.trim() : "",
       description: description ? description.trim() : "",
       features: Array.isArray(features) ? features : [],
@@ -122,10 +226,11 @@ export async function POST(req: NextRequest) {
 
     if (isSupabaseConfigured) {
       try {
-        const insertPayload: any = {
+        const insertPayload: SupabasePackagePayload = {
           brand_slug: newPkg.brand_slug,
           name: newPkg.name,
           price: newPkg.price,
+          original_price: normalizedOriginalPrice || null,
           period: newPkg.period,
           description: newPkg.description,
           features: newPkg.features,
@@ -135,15 +240,44 @@ export async function POST(req: NextRequest) {
           display_order: newPkg.display_order,
         };
 
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from("packages")
           .insert([insertPayload])
           .select();
 
+        let usedFallbackStorage = false;
+
+        if (isMissingOriginalPriceColumnError(error)) {
+          const safePayload: SupabasePackagePayload = { ...insertPayload };
+          delete safePayload.original_price;
+          const retry = await supabase
+            .from("packages")
+            .insert([safePayload])
+            .select();
+          data = retry.data;
+          error = retry.error;
+          usedFallbackStorage = true;
+        }
+
         if (!error && data && data.length > 0) {
-          savePersistedPackage(data[0]);
+          const savedRow: SupabasePackageRow = {
+            ...(data[0] as SupabasePackageRow),
+            original_price: normalizedOriginalPrice,
+          };
+
+          if (usedFallbackStorage) {
+            await saveFallbackOriginalPrice({
+              id: savedRow.id,
+              previousId: newPkg.id,
+              brandSlug: savedRow.brand_slug,
+              name: savedRow.name,
+              originalPrice: normalizedOriginalPrice,
+            });
+          }
+
+          savePersistedPackage(savedRow);
           revalidateAllPages();
-          return NextResponse.json({ success: true, package: data[0] });
+          return NextResponse.json({ success: true, package: savedRow });
         }
       } catch (dbErr) {
         console.warn("Supabase insert warning, falling back to disk state:", dbErr);
@@ -152,8 +286,8 @@ export async function POST(req: NextRequest) {
 
     revalidateAllPages();
     return NextResponse.json({ success: true, package: newPkg });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -168,6 +302,7 @@ export async function PUT(req: NextRequest) {
       brand_slug,
       name,
       price,
+      original_price,
       period,
       description,
       features,
@@ -181,11 +316,14 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "ID Paket diperlukan." }, { status: 400 });
     }
 
-    const updateFields: any = {
+    const normalizedOriginalPrice = normalizeOptionalPrice(original_price);
+
+    const updateFields = {
       id,
       brand_slug: brand_slug ? brand_slug.trim() : "swara-studio",
       name: name ? name.trim() : "",
       price: price ? price.trim() : "",
+      original_price: normalizedOriginalPrice,
       period: period ? period.trim() : "",
       description: description ? description.trim() : "",
       features: Array.isArray(features) ? features : [],
@@ -199,10 +337,11 @@ export async function PUT(req: NextRequest) {
 
     if (isSupabaseConfigured) {
       try {
-        const dbUpdatePayload: any = {
+        const dbUpdatePayload: SupabasePackagePayload = {
           brand_slug: updateFields.brand_slug,
           name: updateFields.name,
           price: updateFields.price,
+          original_price: normalizedOriginalPrice || null,
           period: updateFields.period,
           description: updateFields.description,
           features: updateFields.features,
@@ -212,54 +351,35 @@ export async function PUT(req: NextRequest) {
           display_order: updateFields.display_order,
         };
 
-        let data: any[] | null = null;
+        let result = await upsertPackageInSupabase(id, dbUpdatePayload);
+        let usedFallbackStorage = false;
 
-        // Step 1: If id is valid UUID, update by id
-        if (isValidUUID(id)) {
-          const res = await supabase
-            .from("packages")
-            .update(dbUpdatePayload)
-            .eq("id", id)
-            .select();
-
-          if (res.data && res.data.length > 0) {
-            data = res.data;
-          }
+        if (result.missingOriginalPriceColumn) {
+          const safePayload: SupabasePackagePayload = { ...dbUpdatePayload };
+          delete safePayload.original_price;
+          result = await upsertPackageInSupabase(id, safePayload);
+          usedFallbackStorage = true;
         }
 
-        // Step 2: Fallback update by name & brand_slug if non-UUID or eq(id) returned 0 rows
-        if (!data || data.length === 0) {
-          const resName = await supabase
-            .from("packages")
-            .update(dbUpdatePayload)
-            .eq("name", updateFields.name)
-            .eq("brand_slug", updateFields.brand_slug)
-            .select();
+        if (result.row) {
+          const savedRow: SupabasePackageRow = {
+            ...result.row,
+            original_price: normalizedOriginalPrice,
+          };
 
-          if (resName.data && resName.data.length > 0) {
-            data = resName.data;
+          if (usedFallbackStorage) {
+            await saveFallbackOriginalPrice({
+              id: savedRow.id,
+              previousId: id,
+              brandSlug: savedRow.brand_slug,
+              name: savedRow.name,
+              originalPrice: normalizedOriginalPrice,
+            });
           }
-        }
 
-        // Step 3: Fallback insert if not found in Supabase
-        if (!data || data.length === 0) {
-          const insertPayload: any = { ...dbUpdatePayload };
-          if (isValidUUID(id)) insertPayload.id = id;
-
-          const resInsert = await supabase
-            .from("packages")
-            .insert([insertPayload])
-            .select();
-
-          if (resInsert.data && resInsert.data.length > 0) {
-            data = resInsert.data;
-          }
-        }
-
-        if (data && data.length > 0) {
-          savePersistedPackage(data[0]);
+          savePersistedPackage(savedRow);
           revalidateAllPages();
-          return NextResponse.json({ success: true, package: data[0] });
+          return NextResponse.json({ success: true, package: savedRow });
         }
       } catch (dbErr) {
         console.warn("Supabase update warning, falling back to disk state:", dbErr);
@@ -268,8 +388,8 @@ export async function PUT(req: NextRequest) {
 
     revalidateAllPages();
     return NextResponse.json({ success: true, package: updateFields });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }
 
@@ -286,14 +406,11 @@ export async function DELETE(req: NextRequest) {
     }
 
     deletePersistedPackage(id);
+    await deleteFallbackOriginalPrice(id);
 
     if (isSupabaseConfigured) {
       try {
-        if (isValidUUID(id)) {
-          await supabase.from("packages").delete().eq("id", id);
-        } else {
-          await supabase.from("packages").delete().eq("id", id);
-        }
+        await supabase.from("packages").delete().eq("id", id);
       } catch (dbErr) {
         console.warn("Supabase delete warning:", dbErr);
       }
@@ -301,7 +418,7 @@ export async function DELETE(req: NextRequest) {
 
     revalidateAllPages();
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });
   }
 }

@@ -57,6 +57,7 @@ export interface PackageItem {
   brand_slug: string;
   name: string;
   price: string;
+  original_price?: string;
   period?: string;
   description?: string;
   features: string[];

@@ -37,6 +37,7 @@ export interface PackageData {
   brandTag: string;
   name: string;
   price: string;
+  originalPrice?: string;
   period: string;
   description: string;
   features: string[];

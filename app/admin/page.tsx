@@ -33,7 +33,11 @@ import PhotoCard from "@/components/admin/PhotoCard";
 import BrandCard from "@/components/admin/BrandCard";
 import AdminToast from "@/components/admin/AdminToast";
 import ImageCropperModal, { CropRatioType } from "@/components/admin/ImageCropperModal";
-import { formatRupiahInput } from "@/lib/formatters";
+import {
+  formatRupiahInput,
+  formatOptionalRupiahInput,
+  normalizeOptionalPrice,
+} from "@/lib/formatters";
 
 const EMPTY_ANALYTICS: AnalyticsSummary = {
   counts: { today: 0, week: 0, month: 0, year: 0, all: 0 },
@@ -95,6 +99,7 @@ export default function AdminDashboardPage() {
     brand_slug: "swara-studio",
     name: "",
     price: "",
+    original_price: "",
     period: "",
     description: "",
     features: [] as string[],
@@ -382,19 +387,26 @@ export default function AdminDashboardPage() {
   // Save Package Record
   const handleSavePackage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!packageForm.name || !packageForm.price || !packageForm.brand_slug) {
-      showToastMsg("Nama Paket, Harga, dan Kategori Sub-Brand wajib diisi!", "error");
+    const cleanedPrice = packageForm.price.trim();
+    if (!packageForm.name.trim() || !cleanedPrice || cleanedPrice === "Rp" || !packageForm.brand_slug) {
+      showToastMsg("Nama Paket, Harga Tampil, dan Kategori Sub-Brand wajib diisi!", "error");
       return;
     }
 
     try {
       const method = editingPackage ? "PUT" : "POST";
+      const normalizedOriginalPrice = normalizeOptionalPrice(packageForm.original_price);
       const payload = editingPackage
-        ? packageForm
+        ? {
+            ...packageForm,
+            price: cleanedPrice,
+            original_price: normalizedOriginalPrice,
+          }
         : {
             brand_slug: packageForm.brand_slug,
             name: packageForm.name,
-            price: packageForm.price,
+            price: cleanedPrice,
+            original_price: normalizedOriginalPrice,
             period: packageForm.period,
             description: packageForm.description,
             features: packageForm.features,
@@ -533,6 +545,7 @@ export default function AdminDashboardPage() {
       brand_slug: packageCategoryFilter === "all" ? "swara-studio" : packageCategoryFilter,
       name: "",
       price: "Rp ",
+      original_price: "",
       period: "/ sesi",
       description: "",
       features: [
@@ -556,6 +569,7 @@ export default function AdminDashboardPage() {
       brand_slug: pkg.brand_slug || "swara-studio",
       name: pkg.name || "",
       price: pkg.price || "",
+      original_price: normalizeOptionalPrice(pkg.original_price),
       period: pkg.period || "",
       description: pkg.description || "",
       features: Array.isArray(pkg.features) ? [...pkg.features] : [],
@@ -1010,13 +1024,20 @@ export default function AdminDashboardPage() {
                           </p>
                         </div>
 
-                        <div className="pt-2 border-t border-neutral-800 flex items-baseline gap-1">
-                          <span className="font-serif-heading text-2xl font-bold text-[#C9A961]">
-                            {pkg.price}
-                          </span>
-                          {pkg.period && (
-                            <span className="text-xs text-neutral-400">{pkg.period}</span>
+                        <div className="pt-2 border-t border-neutral-800">
+                          {normalizeOptionalPrice(pkg.original_price) && (
+                            <del className="block font-serif-heading text-xs font-medium text-neutral-500 line-through decoration-neutral-500/80 mb-0.5">
+                              {normalizeOptionalPrice(pkg.original_price)}
+                            </del>
                           )}
+                          <div className="flex items-baseline gap-1 flex-wrap">
+                            <span className="font-serif-heading text-2xl font-bold text-[#C9A961]">
+                              {pkg.price}
+                            </span>
+                            {pkg.period && (
+                              <span className="text-xs text-neutral-400">{pkg.period}</span>
+                            )}
+                          </div>
                         </div>
 
                         {/* Benefits list */}
@@ -1562,7 +1583,46 @@ export default function AdminDashboardPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
-                        Harga Paket *
+                        Harga Coret (Opsional)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={packageForm.original_price}
+                          onChange={(e) =>
+                            setPackageForm({
+                              ...packageForm,
+                              original_price: formatOptionalRupiahInput(e.target.value),
+                            })
+                          }
+                          placeholder="Kosongkan jika tidak diskon"
+                          className="w-full px-4 py-3 pr-9 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
+                        />
+                        {packageForm.original_price && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPackageForm({
+                                ...packageForm,
+                                original_price: "",
+                              })
+                            }
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-neutral-500 hover:text-white transition-colors cursor-pointer"
+                            title="Hapus harga coret"
+                            aria-label="Hapus harga coret"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-neutral-500 mt-1">
+                        Harga sebelum diskon (tampil dicoret).
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
+                        Harga Tampil *
                       </label>
                       <input
                         type="text"
@@ -1573,24 +1633,27 @@ export default function AdminDashboardPage() {
                             price: formatRupiahInput(e.target.value),
                           })
                         }
-                        placeholder="Ketik nominal misal: 750000 -> Otomatis Rp 750.000"
+                        placeholder="Misal: 750000 -> Rp 750.000"
                         className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-sm text-white focus:outline-none focus:border-[#C9A961]"
                         required
                       />
+                      <p className="text-[11px] text-neutral-500 mt-1">
+                        Harga aktif yang ditampilkan ke pengunjung.
+                      </p>
                     </div>
+                  </div>
 
-                    <div>
-                      <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
-                        Keterangan Periode/Sesi
-                      </label>
-                      <input
-                        type="text"
-                        value={packageForm.period}
-                        onChange={(e) => setPackageForm({ ...packageForm, period: e.target.value })}
-                        placeholder="Misal: / sesi photo / hari pernikahan"
-                        className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
-                      />
-                    </div>
+                  <div>
+                    <label className="text-xs font-semibold uppercase tracking-wider text-neutral-300 block mb-1">
+                      Keterangan Periode/Sesi
+                    </label>
+                    <input
+                      type="text"
+                      value={packageForm.period}
+                      onChange={(e) => setPackageForm({ ...packageForm, period: e.target.value })}
+                      placeholder="Misal: / sesi photo / hari pernikahan"
+                      className="w-full px-4 py-3 bg-neutral-950 border border-neutral-800 rounded-xl text-xs text-white focus:outline-none focus:border-[#C9A961]"
+                    />
                   </div>
 
                   <div>
